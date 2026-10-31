@@ -1,0 +1,6 @@
+app/SteamOfflineTool.exe
+app/python/
+app/hesap_notlari.txt
+app/islem_gunlugu.txt
+*.pdb
+*.zip
