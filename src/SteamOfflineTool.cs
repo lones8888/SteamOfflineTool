@@ -20,6 +20,7 @@
 //   (SteamOfflineTool.exe --offline "<hesap>" / --online "<hesap>": pencere acmadan Steam'i o hesapla acar);
 //   tepsi simgesine sag tik -> hesap listesinden hizli cevrimdisi / cevrimici acma.
 // - 1.3.1 (31.10.2026): tepsi menusunde notu yazilan hesap notuyla gorunur; not yoksa hesap (profil adi).
+// - 1.3.2 (31.10.2026): pencerenin en ustunde not: hesap degistirmek icin Steam kapali olmali (aciksa once kapatilir).
 // Derleme: derle.bat (Windows'taki .NET Framework 4 derleyicisi, indirme gerekmez). Dil C# 5 ile sinirli.
 using System;
 using System.Collections.Generic;
@@ -43,8 +44,8 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("Steam Offline Tool")]
 [assembly: AssemblyDescription("Opens Steam with the selected account in offline or online mode")]
 [assembly: AssemblyProduct("Steam Offline Tool")]
-[assembly: AssemblyVersion("1.3.1.0")]
-[assembly: AssemblyFileVersion("1.3.1.0")]
+[assembly: AssemblyVersion("1.3.2.0")]
+[assembly: AssemblyFileVersion("1.3.2.0")]
 
 namespace SteamOfflineTool
 {
@@ -1005,7 +1006,7 @@ namespace SteamOfflineTool
         Button btnCevrimdisi, btnCevrimici, btnKapat, btnWuKapat, btnWuAc;
         Label lblSteam, lblMesaj, lblWu;
         CheckBox chkBaslangic, chkDuzelt;
-        Label lblBaslik, lblAciklama, lblDil;
+        Label lblBaslik, lblAciklama, lblDil, lblNot;
         ComboBox cmbDil;
         Button btnKisayol;
         ContextMenuStrip satirMenu, tepsiMenu;
@@ -1052,6 +1053,10 @@ namespace SteamOfflineTool
             lblSteam = new Label { AutoSize = true, Font = kalin, Margin = new Padding(0, P(5), 0, 0) };
             ust.Controls.Add(lblSteam);
             Ekle(kok, ust, false);
+
+            lblNot = Yazi();                // en ustte: hesap degistirmek icin Steam kapali olmali
+            lblNot.Margin = new Padding(0, 0, 0, P(6));
+            Ekle(kok, lblNot, false);
 
             tablo = TabloOlustur();
             Ekle(kok, tablo, true);
@@ -1118,6 +1123,8 @@ namespace SteamOfflineTool
         void MetinleriUygula()
         {
             lblBaslik.Text = Dil.T("Accounts", "Hesaplar");
+            lblNot.Text = Dil.T("To switch accounts, Steam must be closed. If it is running, the tool closes it first (it asks you).",
+                                "Hesap değiştirmek için Steam kapalı olmalı. Açıksa program önce kapatır (sana sorar).");
             btnCevrimdisi.Text = Dil.T("Open Offline", "Çevrimdışı Aç");
             btnCevrimici.Text = Dil.T("Open Online", "Çevrimiçi Aç");
             btnKapat.Text = Dil.T("Close Steam", "Steam'i Kapat");
