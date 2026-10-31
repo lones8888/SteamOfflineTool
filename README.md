@@ -4,7 +4,7 @@ Open Steam with **the account you choose**, in **offline or online mode**, from 
 
 Made for playing single-player games offline without Steam starting big updates, and for people who use several Steam accounts on one PC.
 
-> **Note:** to switch accounts, Steam must be closed. If it is running, the tool closes it first (it asks you).
+> **Note:** in Steam, turn off **“Ask which account to use on startup”** – the tick on Steam's account chooser screen (also in Steam *Settings → Interface*). If it is on, Steam shows its account chooser instead of opening the account you picked.
 
 > **[Türkçe açıklama aşağıda ↓](#türkçe)**
 
@@ -77,7 +77,7 @@ Windows 10 / 11 with .NET Framework 4.6.2 or newer (built in). Python is bundled
 
 Steam'i **seçtiğin hesapla**, **çevrimdışı ya da çevrimiçi** açar. Steam'in "Hesap Değiştir" ekranı her zaman çevrimiçi giriş yaptığı için bu pencere kullanılır.
 
-> **Not:** hesap değiştirmek için Steam kapalı olmalı. Açıksa program önce kapatır (sana sorar).
+> **Not:** Steam'de hesap seçme ekranındaki **“Ask which account to use on startup”** (açılışta hangi hesabı soracağı) tiki kapalı olmalı; Steam *Ayarlar → Arayüz*'de de var. Açıksa Steam, seçtiğin hesap yerine hesap seçme ekranını açar.
 
 **Özellikler:** hesap seç → Çevrimdışı Aç / Çevrimiçi Aç; hesaba sağ tık → o hesabı doğrudan açan **masaüstü kısayolu**; saat yanındaki simgeye sağ tık → hesap listesinden **hızlı açma** (not yazdığın hesap orada notuyla görünür); hesap notları; Steam ayar denetimi (Cloud kapalı, Remote Play kapalı, oyunlar yalnızca başlatılınca güncellenir); Windows Update kapat / varsayılana döndür; **İngilizce / Türkçe** arayüz (pencerenin altından seçilir).
 

@@ -20,7 +20,9 @@
 //   (SteamOfflineTool.exe --offline "<hesap>" / --online "<hesap>": pencere acmadan Steam'i o hesapla acar);
 //   tepsi simgesine sag tik -> hesap listesinden hizli cevrimdisi / cevrimici acma.
 // - 1.3.1 (31.10.2026): tepsi menusunde notu yazilan hesap notuyla gorunur; not yoksa hesap (profil adi).
-// - 1.3.2 (31.10.2026): pencerenin en ustunde not: hesap degistirmek icin Steam kapali olmali (aciksa once kapatilir).
+// - 1.3.2 (31.10.2026): pencerenin en ustunde not.
+// - 1.3.3 (31.10.2026): not duzeltildi: Steam'in "Ask which account to use on startup" tiki (hesap secme ekrani,
+//   Ayarlar > Arayuz) kapali olmali; aciksa Steam secilen hesap yerine hesap secme ekranini acar.
 // Derleme: derle.bat (Windows'taki .NET Framework 4 derleyicisi, indirme gerekmez). Dil C# 5 ile sinirli.
 using System;
 using System.Collections.Generic;
@@ -44,8 +46,8 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("Steam Offline Tool")]
 [assembly: AssemblyDescription("Opens Steam with the selected account in offline or online mode")]
 [assembly: AssemblyProduct("Steam Offline Tool")]
-[assembly: AssemblyVersion("1.3.2.0")]
-[assembly: AssemblyFileVersion("1.3.2.0")]
+[assembly: AssemblyVersion("1.3.3.0")]
+[assembly: AssemblyFileVersion("1.3.3.0")]
 
 namespace SteamOfflineTool
 {
@@ -1054,7 +1056,7 @@ namespace SteamOfflineTool
             ust.Controls.Add(lblSteam);
             Ekle(kok, ust, false);
 
-            lblNot = Yazi();                // en ustte: hesap degistirmek icin Steam kapali olmali
+            lblNot = Yazi();                // en ustte: Steam'in "acilista hesap sor" tiki kapali olmali
             lblNot.Margin = new Padding(0, 0, 0, P(6));
             Ekle(kok, lblNot, false);
 
@@ -1123,8 +1125,10 @@ namespace SteamOfflineTool
         void MetinleriUygula()
         {
             lblBaslik.Text = Dil.T("Accounts", "Hesaplar");
-            lblNot.Text = Dil.T("To switch accounts, Steam must be closed. If it is running, the tool closes it first (it asks you).",
-                                "Hesap değiştirmek için Steam kapalı olmalı. Açıksa program önce kapatır (sana sorar).");
+            lblNot.Text = Dil.T("In Steam, turn off \u201cAsk which account to use on startup\u201d (tick on Steam's account chooser, also Settings > Interface). "
+                                + "If it is on, Steam shows its account chooser instead of the account you picked.",
+                                "Steam'de hesap seçme ekranındaki \u201cAsk which account to use on startup\u201d (açılışta hangi hesabı soracağı) tiki kapalı olmalı "
+                                + "(Steam Ayarlar > Arayüz'de de var). Açıksa Steam, seçtiğin hesap yerine hesap seçme ekranını açar.");
             btnCevrimdisi.Text = Dil.T("Open Offline", "Çevrimdışı Aç");
             btnCevrimici.Text = Dil.T("Open Online", "Çevrimiçi Aç");
             btnKapat.Text = Dil.T("Close Steam", "Steam'i Kapat");
