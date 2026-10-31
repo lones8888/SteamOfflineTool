@@ -8,6 +8,8 @@ dosyalarini okuyan imzasiz exe'yi "PDM:Trojan.Win32.Generic" diye karantinaya al
    once tarihli yedek alir. Steam KAPALIYKEN calistirilir. Istenen hesap dosyada yoksa 6 ile cikar.
 2) Hesap basina Steam ayarlari (Cloud kapali, Remote Play kapali, oyunlar yalnizca baslatilinca guncellenir):
    denetler, Steam kapaliyken duzeltir. Dosyanin ilk hali bir kez .yedek_steambaslat olarak saklanir.
+3) Steam'in "her baslatildiginda hangi hesabin kullanilacagini sor" ayari (config.vdf AlwaysShowUserChooser): aciksa
+   Steam secilen hesabi acmaz, hesap secme ekranini gosterir. --ac her seferinde kapatir (--duzelt verilmese de).
 
 Kullanim (bat): python steam_hesap.py <Steam klasoru> [--hepsi | --hesaplar a,b,c] [--deger 1|0] [--dene]
   --hepsi     : butun hesaplar
@@ -40,6 +42,11 @@ KURALLAR = (
     (u"Oyunlar yalnızca başlatılınca güncellenir", u"Oyun güncelleme zamanı farklı", True, os.path.join("config", "config.vdf"),
      ("InstallConfigStore", "Software", "Valve", "Steam", "GlobalDefaultAppUpdateBehavior"), "1"),
 )
+# Steam Ayarlar > Arayuz "Steam her baslatildiginda hangi hesabin kullanilacagini sor". Steam'in ayar tanimi
+# (steammessages_clientsettings.proto always_show_user_chooser): ConfigStore_Install "WebStorage\Auth\AlwaysShowUserChooser".
+# Satir yoksa Steam kapali sayar: satir eklenmez, yalniz "0" olmayan deger "0" yapilir (TcNo Account Switcher da boyle).
+SECICI = (u"Hesap seçme ekranı kapalı", u"Hesap seçme ekranı açık", True, os.path.join("config", "config.vdf"),
+          ("InstallConfigStore", "WebStorage", "Auth", "AlwaysShowUserChooser"), "0")
 
 
 class BicimHatasi(Exception):
@@ -328,13 +335,21 @@ def ayar_sorunlari(steam, no):
     None: bu hesapla bu bilgisayarda Steam hic acilmamis (userdata klasoru yok)."""
     if no is not None and not _hesap_var(steam, no):
         return None
-    sorunlar = []
+    sorunlar, okunan = [], {}
     for kural in KURALLAR:
         if kural[2] != (no is None):
             continue
         yol = _kural_dosyasi(steam, no, kural)
-        if os.path.isfile(yol) and KvMetin.oku(yol).deger(kural[4]) != kural[5]:
+        if not os.path.isfile(yol):
+            continue
+        if yol not in okunan:
+            okunan[yol] = KvMetin.oku(yol)
+        if okunan[yol].deger(kural[4]) != kural[5]:
             sorunlar.append(kural)
+    if no is None:
+        yol = os.path.join(steam, SECICI[3])
+        if os.path.isfile(yol) and _secici_acik(okunan.get(yol) or KvMetin.oku(yol)):
+            sorunlar.append(SECICI)
     return sorunlar
 
 
@@ -359,7 +374,47 @@ def ayar_duzelt(steam, no):
             shutil.copy2(yol, yedek)
         _atomik_yaz(yol, kv.metin.encode("latin-1"))
         duzelen.append(kural[0])
+    if no is None and secici_kapat(steam):
+        duzelen.append(SECICI[0])
     return duzelen
+
+
+def _secici_dugumu(kv):
+    """config.vdf'teki AlwaysShowUserChooser degeri (Steam'de yeri InstallConfigStore/WebStorage/Auth; nerede olursa
+    olsun ilk eslesme alinir). Yoksa None."""
+    bekleyen = [kv._kok]
+    while bekleyen:
+        d = bekleyen.pop()
+        for c in d.cocuklar:
+            if c.blok:
+                bekleyen.append(c)
+            elif c.anahtar.lower() == SECICI[4][-1].lower():
+                return c
+    return None
+
+
+def _secici_acik(kv):
+    c = _secici_dugumu(kv)
+    return c is not None and kv.metin[c.bas:c.son] != SECICI[5]
+
+
+def secici_kapat(steam):
+    """Steam KAPALIYKEN: hesap secme ekrani aciksa "0" yazar (satir yoksa eklemez). Degistiyse True."""
+    yol = os.path.join(steam, SECICI[3])
+    if not os.path.isfile(yol):
+        return False
+    kv = KvMetin.oku(yol)
+    c = _secici_dugumu(kv)
+    if c is None or kv.metin[c.bas:c.son] == SECICI[5]:
+        return False
+    yeni = KvMetin(kv.metin[:c.bas] + SECICI[5] + kv.metin[c.son:])
+    if _secici_acik(yeni):
+        raise BicimHatasi("config.vdf yazilamadi")
+    yedek = yol + ".yedek_steambaslat"
+    if not os.path.exists(yedek):
+        shutil.copy2(yol, yedek)
+    _atomik_yaz(yol, yeni.metin.encode("latin-1"))
+    return True
 
 
 # ------------------------------------------------------------------ exe icin komutlar (JSON)
@@ -393,6 +448,12 @@ def ac(steam, ham, deger, duzelt):
                 duzeltilen += ayar_duzelt(steam, n)
             except Exception as e:
                 hatalar.append(str(e))
+    else:
+        try:                                # hesap secme ekrani aciksa Steam secilen hesabi acmaz: her seferinde kapat
+            if secici_kapat(steam):
+                duzeltilen.append(SECICI[0])
+        except Exception as e:
+            hatalar.append(str(e))
     _oto_giris_yaz(ham)
     return {"tamam": True, "duzeltilen": duzeltilen, "hatalar": hatalar}
 

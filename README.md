@@ -4,7 +4,7 @@ Open Steam with **the account you choose**, in **offline or online mode**, from 
 
 Made for playing single-player games offline without Steam starting big updates, and for people who use several Steam accounts on one PC.
 
-> **Note:** in Steam, turn off **“Ask which account to use on startup”** – the tick on Steam's account chooser screen (also in Steam *Settings → Interface*). If it is on, Steam shows its account chooser instead of opening the account you picked.
+> **Note:** Steam's **“Ask which account to use each time Steam starts”** (*Settings → Interface*) must stay off, otherwise Steam shows its account chooser instead of opening the account you picked. **The tool turns it off automatically** every time it opens an account.
 
 > **[Türkçe açıklama aşağıda ↓](#türkçe)**
 
@@ -14,7 +14,7 @@ Made for playing single-player games offline without Steam starting big updates,
 - **Desktop shortcut per account** – right-click an account → *Desktop shortcut: open offline/online*. One double-click opens Steam with that account, without the window.
 - **Tray quick switch** – right-click the tray icon → *Open offline / Open online* → pick an account. An account with a note is shown there by its note.
 - **Notes** next to each account (stored only on your PC).
-- **Settings check** (✔ / ✖ column): Steam Cloud off, Remote Play off, games update only when launched. Wrong settings are fixed while Steam is closed (optional checkbox).
+- **Settings check** (✔ / ✖ column): Steam Cloud off, Remote Play off, games update only when launched, account chooser off. Wrong settings are fixed while Steam is closed (optional checkbox; the account chooser is always turned off).
 - **Windows Update off / back to default** (Chris Titus WinUtil "Disable Updates" steps, asks for administrator permission).
 - **English / Türkçe** interface (English by default).
 - No installer, no internet, no account passwords: it only edits Steam's own local files while Steam is closed.
@@ -62,6 +62,7 @@ For offline mode the account must have signed in once on this PC with **Remember
 | Steam Cloud off | Avoids cloud sync conflicts when you play offline. **Your saves are then not backed up to the cloud** – untick *Fix Steam settings if wrong* if you want Cloud on. |
 | Remote Play off | Not needed for offline play. |
 | Games update only when launched | Steam does not download updates in the background. |
+| Account chooser off | Steam's *Ask which account to use each time Steam starts*. If it is on, Steam shows its account chooser instead of the account you picked, so the tool always turns it off when it opens an account (even with the checkbox unticked). |
 
 ## Requirements
 
@@ -77,9 +78,9 @@ Windows 10 / 11 with .NET Framework 4.6.2 or newer (built in). Python is bundled
 
 Steam'i **seçtiğin hesapla**, **çevrimdışı ya da çevrimiçi** açar. Steam'in "Hesap Değiştir" ekranı her zaman çevrimiçi giriş yaptığı için bu pencere kullanılır.
 
-> **Not:** Steam'de hesap seçme ekranındaki **“Ask which account to use on startup”** (açılışta hangi hesabı soracağı) tiki kapalı olmalı; Steam *Ayarlar → Arayüz*'de de var. Açıksa Steam, seçtiğin hesap yerine hesap seçme ekranını açar.
+> **Not:** Steam'in **“Steam her başlatıldığında hangi hesabın kullanılacağını sor”** ayarı (*Ayarlar → Arayüz*) kapalı olmalı; açıksa Steam seçtiğin hesap yerine hesap seçme ekranını açar. **Program her hesap açışında bunu kendisi kapatır.**
 
-**Özellikler:** hesap seç → Çevrimdışı Aç / Çevrimiçi Aç; hesaba sağ tık → o hesabı doğrudan açan **masaüstü kısayolu**; saat yanındaki simgeye sağ tık → hesap listesinden **hızlı açma** (not yazdığın hesap orada notuyla görünür); hesap notları; Steam ayar denetimi (Cloud kapalı, Remote Play kapalı, oyunlar yalnızca başlatılınca güncellenir); Windows Update kapat / varsayılana döndür; **İngilizce / Türkçe** arayüz (pencerenin altından seçilir).
+**Özellikler:** hesap seç → Çevrimdışı Aç / Çevrimiçi Aç; hesaba sağ tık → o hesabı doğrudan açan **masaüstü kısayolu**; saat yanındaki simgeye sağ tık → hesap listesinden **hızlı açma** (not yazdığın hesap orada notuyla görünür); hesap notları; Steam ayar denetimi (Cloud kapalı, Remote Play kapalı, oyunlar yalnızca başlatılınca güncellenir, hesap seçme ekranı kapalı); Windows Update kapat / varsayılana döndür; **İngilizce / Türkçe** arayüz (pencerenin altından seçilir).
 
 **İndirme linki (her zaman son sürüm):**
 

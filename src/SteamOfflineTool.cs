@@ -23,6 +23,8 @@
 // - 1.3.2 (31.10.2026): pencerenin en ustunde not.
 // - 1.3.3 (31.10.2026): not duzeltildi: Steam'in "Ask which account to use on startup" tiki (hesap secme ekrani,
 //   Ayarlar > Arayuz) kapali olmali; aciksa Steam secilen hesap yerine hesap secme ekranini acar.
+// - 1.3.4 (31.10.2026): bu ayari (config.vdf AlwaysShowUserChooser) motor her hesap acilisinda kendisi kapatir;
+//   ayarlar sutununda da gorunur ("Hesap secme ekrani acik").
 // Derleme: derle.bat (Windows'taki .NET Framework 4 derleyicisi, indirme gerekmez). Dil C# 5 ile sinirli.
 using System;
 using System.Collections.Generic;
@@ -46,8 +48,8 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("Steam Offline Tool")]
 [assembly: AssemblyDescription("Opens Steam with the selected account in offline or online mode")]
 [assembly: AssemblyProduct("Steam Offline Tool")]
-[assembly: AssemblyVersion("1.3.3.0")]
-[assembly: AssemblyFileVersion("1.3.3.0")]
+[assembly: AssemblyVersion("1.3.4.0")]
+[assembly: AssemblyFileVersion("1.3.4.0")]
 
 namespace SteamOfflineTool
 {
@@ -185,6 +187,7 @@ namespace SteamOfflineTool
             { "Remote Play kapalı", "Remote Play off" }, { "Remote Play açık", "Remote Play on" },
             { "Oyunlar yalnızca başlatılınca güncellenir", "Games update only when launched" },
             { "Oyun güncelleme zamanı farklı", "Game update timing is different" },
+            { "Hesap seçme ekranı kapalı", "Account chooser off" }, { "Hesap seçme ekranı açık", "Account chooser on" },
             { "tüm hesaplar", "all accounts" }
         };
 
@@ -1125,17 +1128,17 @@ namespace SteamOfflineTool
         void MetinleriUygula()
         {
             lblBaslik.Text = Dil.T("Accounts", "Hesaplar");
-            lblNot.Text = Dil.T("In Steam, turn off \u201cAsk which account to use on startup\u201d (tick on Steam's account chooser, also Settings > Interface). "
-                                + "If it is on, Steam shows its account chooser instead of the account you picked.",
-                                "Steam'de hesap seçme ekranındaki \u201cAsk which account to use on startup\u201d (açılışta hangi hesabı soracağı) tiki kapalı olmalı "
-                                + "(Steam Ayarlar > Arayüz'de de var). Açıksa Steam, seçtiğin hesap yerine hesap seçme ekranını açar.");
+            lblNot.Text = Dil.T("Steam's \u201cAsk which account to use each time Steam starts\u201d must stay off (otherwise Steam shows its account chooser "
+                                + "instead of the account you picked). The tool turns it off every time it opens an account.",
+                                "Steam'in \u201cSteam her başlatıldığında hangi hesabın kullanılacağını sor\u201d ayarı kapalı olmalı (açıksa Steam seçtiğin hesap "
+                                + "yerine hesap seçme ekranını açar). Program her hesap açışında bunu kendisi kapatır.");
             btnCevrimdisi.Text = Dil.T("Open Offline", "Çevrimdışı Aç");
             btnCevrimici.Text = Dil.T("Open Online", "Çevrimiçi Aç");
             btnKapat.Text = Dil.T("Close Steam", "Steam'i Kapat");
-            lblAciklama.Text = Dil.T("Settings column: ✔ = Steam Cloud off, Remote Play off, games update only when launched. "
+            lblAciklama.Text = Dil.T("Settings column: ✔ = Steam Cloud off, Remote Play off, games update only when launched, account chooser off. "
                                    + "An account with ✖ is fixed while Steam is closed (hover for details). "
                                    + "Right-click an account for a desktop shortcut that opens it directly.",
-                                     "Ayarlar sütunu: ✔ = Steam Cloud kapalı, Remote Play kapalı, oyunlar yalnızca başlatılınca güncellenir. "
+                                     "Ayarlar sütunu: ✔ = Steam Cloud kapalı, Remote Play kapalı, oyunlar yalnızca başlatılınca güncellenir, hesap seçme ekranı kapalı. "
                                    + "✖ olan hesap Steam kapalıyken düzeltilir (ayrıntı için üzerine gel). "
                                    + "Hesabı doğrudan açan masaüstü kısayolu için hesaba sağ tıkla.");
             btnWuKapat.Text = Dil.T("Turn Off Updates", "Güncellemeleri Kapat");
