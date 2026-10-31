@@ -10,7 +10,7 @@ Made for playing single-player games offline without Steam starting big updates,
 
 - **Pick an account → Open Offline / Open Online.** If Steam is running, it is closed first (with your OK) and started again in the chosen mode.
 - **Desktop shortcut per account** – right-click an account → *Desktop shortcut: open offline/online*. One double-click opens Steam with that account, without the window.
-- **Tray quick switch** – right-click the tray icon → *Open offline / Open online* → pick an account.
+- **Tray quick switch** – right-click the tray icon → *Open offline / Open online* → pick an account. An account with a note is shown there by its note.
 - **Notes** next to each account (stored only on your PC).
 - **Settings check** (✔ / ✖ column): Steam Cloud off, Remote Play off, games update only when launched. Wrong settings are fixed while Steam is closed (optional checkbox).
 - **Windows Update off / back to default** (Chris Titus WinUtil "Disable Updates" steps, asks for administrator permission).
@@ -19,12 +19,20 @@ Made for playing single-player games offline without Steam starting big updates,
 
 ## Download and run
 
-1. Go to **[Releases](../../releases/latest)** and download **SteamOfflineTool.zip**.
+Direct download (always the latest version):
+
+```text
+https://github.com/lones8888/SteamOfflineTool/releases/latest/download/SteamOfflineTool.zip
+```
+
+1. Download **SteamOfflineTool.zip** (link above, or from **[Releases](../../releases/latest)**).
 2. Extract it, for example to your **Desktop** (do not run it from inside the zip).
 3. Run **SteamOfflineTool.exe** from the extracted folder.
 4. Optional: click **Desktop shortcut** in the window, and tick **Start with Windows** if you want it in the tray at startup.
 
 ### One-line install (PowerShell)
+
+Open a normal PowerShell window (administrator is not needed) and paste:
 
 ```powershell
 irm https://raw.githubusercontent.com/lones8888/SteamOfflineTool/main/install.ps1 | iex
@@ -67,11 +75,23 @@ Windows 10 / 11 with .NET Framework 4.6.2 or newer (built in). Python is bundled
 
 Steam'i **seçtiğin hesapla**, **çevrimdışı ya da çevrimiçi** açar. Steam'in "Hesap Değiştir" ekranı her zaman çevrimiçi giriş yaptığı için bu pencere kullanılır.
 
-**Özellikler:** hesap seç → Çevrimdışı Aç / Çevrimiçi Aç; hesaba sağ tık → o hesabı doğrudan açan **masaüstü kısayolu**; saat yanındaki simgeye sağ tık → hesap listesinden **hızlı açma**; hesap notları; Steam ayar denetimi (Cloud kapalı, Remote Play kapalı, oyunlar yalnızca başlatılınca güncellenir); Windows Update kapat / varsayılana döndür; **İngilizce / Türkçe** arayüz (pencerenin altından seçilir).
+**Özellikler:** hesap seç → Çevrimdışı Aç / Çevrimiçi Aç; hesaba sağ tık → o hesabı doğrudan açan **masaüstü kısayolu**; saat yanındaki simgeye sağ tık → hesap listesinden **hızlı açma** (not yazdığın hesap orada notuyla görünür); hesap notları; Steam ayar denetimi (Cloud kapalı, Remote Play kapalı, oyunlar yalnızca başlatılınca güncellenir); Windows Update kapat / varsayılana döndür; **İngilizce / Türkçe** arayüz (pencerenin altından seçilir).
 
-**Kullanım:** [Releases](../../releases/latest) → **SteamOfflineTool.zip** → masaüstüne çıkar → klasördeki **SteamOfflineTool.exe**'yi çalıştır. Kurulum programı yok (imzasız kurulumları antivirüsler yanlışlıkla engelliyor). İstersen penceredeki **Masaüstüne kısayol** düğmesine bas, **Windows açılınca başlat**'ı işaretle.
+**İndirme linki (her zaman son sürüm):**
 
-**Tek satır (PowerShell):** `irm https://raw.githubusercontent.com/lones8888/SteamOfflineTool/main/install.ps1 | iex` – son sürümü masaüstündeki `SteamOfflineTool` klasörüne çıkarır ve açar; güncellemek için aynı satırı tekrar çalıştır.
+```text
+https://github.com/lones8888/SteamOfflineTool/releases/latest/download/SteamOfflineTool.zip
+```
+
+**Kullanım:** zip'i indir → masaüstüne çıkar → klasördeki **SteamOfflineTool.exe**'yi çalıştır. Kurulum programı yok (imzasız kurulumları antivirüsler yanlışlıkla engelliyor). İstersen penceredeki **Masaüstüne kısayol** düğmesine bas, **Windows açılınca başlat**'ı işaretle.
+
+**Tek satırla kurulum:** normal PowerShell aç (yönetici gerekmez) ve yapıştır:
+
+```powershell
+irm https://raw.githubusercontent.com/lones8888/SteamOfflineTool/main/install.ps1 | iex
+```
+
+Son sürümü masaüstündeki `SteamOfflineTool` klasörüne çıkarır ve açar (notların korunur); güncellemek için aynı satırı tekrar çalıştır.
 
 **Not:** "Steam ayarları yanlışsa düzelt" açıkken Steam Cloud kapatılır, oyun kayıtların buluta yedeklenmez. Çevrimdışı açılış için hesapla bu bilgisayarda bir kez "Beni hatırla" işaretli giriş yapılmış olmalı.
 

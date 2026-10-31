@@ -15,10 +15,11 @@
 //   onarim servisi (WaaSMedicSvc, SYSTEM) BITS ve wuauserv'i birkac dakika sonra geri acabiliyor (31.10.2026'da
 //   9 dk sonra acti); politika (NoAutoUpdate) ve UsoSvc kapali kalir, pencere bu durumu "KISMEN KAPALI" gosterir.
 // - Kucultunce gorev cubugundan cekilip saat yanindaki simgelere (tepsi) iner.
-// - Kurulum / kaldirma: KUR.bat / KALDIR.bat (kendini kopyalayip baslangica ekleyen exe'yi de Kaspersky virus sandi).
+// - Kurulum yok: zip'i cikar, exe'yi calistir (kendini kopyalayip baslangica ekleyen kurulumu Kaspersky virus sandi).
 // - 1.3 (31.10.2026): arayuz dili Ingilizce (varsayilan) / Turkce; hesaba sag tik -> masaustu kisayolu
 //   (SteamOfflineTool.exe --offline "<hesap>" / --online "<hesap>": pencere acmadan Steam'i o hesapla acar);
 //   tepsi simgesine sag tik -> hesap listesinden hizli cevrimdisi / cevrimici acma.
+// - 1.3.1 (31.10.2026): tepsi menusunde notu yazilan hesap notuyla gorunur; not yoksa hesap (profil adi).
 // Derleme: derle.bat (Windows'taki .NET Framework 4 derleyicisi, indirme gerekmez). Dil C# 5 ile sinirli.
 using System;
 using System.Collections.Generic;
@@ -42,8 +43,8 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("Steam Offline Tool")]
 [assembly: AssemblyDescription("Opens Steam with the selected account in offline or online mode")]
 [assembly: AssemblyProduct("Steam Offline Tool")]
-[assembly: AssemblyVersion("1.3.0.0")]
-[assembly: AssemblyFileVersion("1.3.0.0")]
+[assembly: AssemblyVersion("1.3.1.0")]
+[assembly: AssemblyFileVersion("1.3.1.0")]
 
 namespace SteamOfflineTool
 {
@@ -1435,14 +1436,14 @@ namespace SteamOfflineTool
             tepsiMenu.Items.Add(Dil.T("Exit", "Çıkış"), null, delegate { Close(); });
         }
 
-        // tepsi menusundeki yazi: hesap (profil adi) - not
+        // tepsi menusundeki yazi: not yazildiysa not, yoksa hesap (profil adi)
         string HesapYazisi(Hesap h)
         {
             string not;
             notlar.TryGetValue(h.Ad, out not);
             string s = h.Ad;
             if (!string.IsNullOrEmpty(h.Persona) && !h.Persona.Equals(h.Ad, StringComparison.OrdinalIgnoreCase)) s += " (" + h.Persona + ")";
-            if (!string.IsNullOrWhiteSpace(not)) s += " - " + not.Trim();
+            if (!string.IsNullOrWhiteSpace(not)) s = not.Trim();
             if (s.Length > 70) s = s.Substring(0, 67) + "...";
             return s.Replace("&", "&&");    // & menude kisayol harfi sayilmasin
         }
