@@ -1109,6 +1109,11 @@ namespace SteamOfflineTool
             catch (Exception) { }
         }
 
+        public static Color Karistir(Color a, Color b, float oran)
+        {
+            return Color.FromArgb((int)(a.R + (b.R - a.R) * oran), (int)(a.G + (b.G - a.G) * oran), (int)(a.B + (b.B - a.B) * oran));
+        }
+
         public static GraphicsPath Yuvarlak(RectangleF r, float yaricap)
         {
             var yol = new GraphicsPath();
@@ -1149,6 +1154,9 @@ namespace SteamOfflineTool
             set { ana = value; Invalidate(); }
         }
 
+        // renkli dugme (cevrimdisi gri, cevrimici yesil): renk cizerken temadan okunur
+        public Func<Color> Dolgu, DolguYazi;
+
         protected override void OnMouseEnter(EventArgs e) { ustunde = true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { ustunde = basili = false; Invalidate(); base.OnMouseLeave(e); }
         protected override void OnMouseUp(MouseEventArgs e) { basili = false; Invalidate(); base.OnMouseUp(e); }
@@ -1173,6 +1181,13 @@ namespace SteamOfflineTool
             // ince cerceve: tiklanabilir oldugu belli olsun; ustune gelince sari
             Color kenar = !Enabled ? Tema.KenarPasif : ustunde && !ana ? Tema.Vurgu : Focused && ShowFocusCues ? Tema.OdakKenar : ana ? zemin : Tema.Cerceve;
             Color yazi = !Enabled ? Tema.YaziPasif : ana ? Tema.VurguYazi : Tema.Metin;
+            if (Dolgu != null && Enabled)
+            {
+                Color d = Dolgu();
+                zemin = basili ? Tema.Karistir(d, Color.Black, 0.15f) : ustunde ? Tema.Karistir(d, Color.White, 0.15f) : d;
+                kenar = Focused && ShowFocusCues ? Tema.OdakKenar : zemin;
+                yazi = DolguYazi != null ? DolguYazi() : Color.White;
+            }
             using (GraphicsPath yol = Tema.Yuvarlak(new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), 8f * Tema.Oran))
             {
                 using (var f = new SolidBrush(zemin)) g.FillPath(f, yol);
@@ -1622,7 +1637,8 @@ namespace SteamOfflineTool
         Point ipucuYeri;
         public string NotIpucu = "", NotYeri = "";
         public event Action<Hesap, string> NotDegisti;      // not yazildi ya da vazgecildi (yazi degismemis olabilir)
-        public event Action<Hesap, Point> AcmaIstendi;      // cift tik / Enter: cevrimdisi mi cevrimici mi (ekran konumu)
+        public event Action<Hesap, Point> AcmaIstendi;      // Enter: kartin altinda acma ve kisayol secenekleri (ekran konumu)
+        public event EventHandler SeciliDegisti;            // alttaki secim seridi (cevrimdisi / cevrimici ac, kisayol)
 
         public HesapKartlari(float olcek, Font kalin, Font kucuk, KoyuIpucu ipucu)
         {
@@ -1674,6 +1690,7 @@ namespace SteamOfflineTool
             Yerlestir();
             Invalidate();
             if (secili >= 0) Gorunur(secili);
+            if (SeciliDegisti != null) SeciliDegisti(this, EventArgs.Empty);
         }
 
         public void Sec(string ad)
@@ -1689,6 +1706,7 @@ namespace SteamOfflineTool
             secili = i;
             Invalidate();
             if (i >= 0) Gorunur(i);
+            if (SeciliDegisti != null) SeciliDegisti(this, EventArgs.Empty);
         }
 
         // ---------------------------------------------------------- yerlesim
@@ -1881,15 +1899,12 @@ namespace SteamOfflineTool
             base.OnMouseDown(e);
         }
 
-        // cift tik: hesabi acma secenekleri (not satirinda degil: orada tek tik notu yazar)
-        protected override void OnMouseDoubleClick(MouseEventArgs e)
+        // Enter: secili kartin hemen altinda acma ve kisayol secenekleri (fareyle: alttaki seritte)
+        void SecenekleriAc(int i)
         {
-            base.OnMouseDoubleClick(e);
-            if (e.Button != MouseButtons.Left) return;
-            int i = Bul(e.Location);
-            if (i < 0 || Bolum(i, e.Location) == 2) return;
-            SeciliYap(i);
-            if (AcmaIstendi != null) AcmaIstendi(ogeler[i].Hesap, PointToScreen(e.Location));
+            if (AcmaIstendi == null) return;
+            Rectangle r = KartAlani(i);
+            AcmaIstendi(ogeler[i].Hesap, PointToScreen(new Point(r.X, r.Bottom + P(2))));
         }
 
         protected override bool IsInputKey(Keys tus)
@@ -1919,12 +1934,8 @@ namespace SteamOfflineTool
                     NotuDuzenle();
                     e.Handled = true;
                     return;
-                case Keys.Enter:                            // klavyeyle: secili kartin ortasinda acma secenekleri
-                    if (secili >= 0 && AcmaIstendi != null)
-                    {
-                        Rectangle r = KartAlani(secili);
-                        AcmaIstendi(ogeler[secili].Hesap, PointToScreen(new Point(r.X + r.Width / 2, r.Y + r.Height / 2)));
-                    }
+                case Keys.Enter:                            // klavyeyle: secili kartin altinda acma secenekleri
+                    if (secili >= 0) SecenekleriAc(secili);
                     e.Handled = true;
                     return;
                 default: return;
@@ -2078,6 +2089,9 @@ namespace SteamOfflineTool
         HesapKartlari kartlar;
         KoyuButon btnWuVarsayilan;
         Label lblSteamYazi;
+        FlowLayoutPanel secimCubugu;    // 1.4: hesap secilince altta
+        Label lblSecili;
+        KoyuButon btnCevrimdisi, btnCevrimici, btnHesapKisayol;
         ContextMenuStrip acmaMenu, kisayolMenu;     // 1.4: cift tik (cevrimdisi / cevrimici) ve alttaki kisayol secenekleri
         Label lblMesaj, lblWu;
         DurumIsigi wuIsigi;             // 1.4: Windows Update kapali / kismen kapaliysa yesil; tiklayinca kapatir
@@ -2188,6 +2202,25 @@ namespace SteamOfflineTool
             kartlar = KartlarOlustur();
             Ekle(kok, kartlar, true);
 
+            // 1.4: hesap secilince altta: hesap adi, Cevrimdisi Ac, Cevrimici Ac, Kisayol (secim yoksa gizli)
+            secimCubugu = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Dock = DockStyle.Fill, Margin = new Padding(0, P(8), 0, 0), Visible = false };
+            lblSecili = new Label { AutoSize = true, Font = kalin, Margin = new Padding(0, P(7), P(12), 0) };
+            btnCevrimdisi = Buton("", false);           // cevrimdisi gri, cevrimici yesil (karttaki son mod noktasi gibi)
+            btnCevrimdisi.Font = kalin;
+            btnCevrimdisi.Dolgu = () => Tema.Cevrimdisi;
+            btnCevrimdisi.DolguYazi = () => Color.White;
+            btnCevrimici = Buton("", false);
+            btnCevrimici.Font = kalin;
+            btnCevrimici.Dolgu = () => Tema.Yesil;
+            btnCevrimici.DolguYazi = () => Tema.VurguYazi;
+            btnHesapKisayol = Buton("", false);
+            btnCevrimdisi.Click += delegate { Ac("1"); };
+            btnCevrimici.Click += delegate { Ac("0"); };
+            btnHesapKisayol.Click += delegate { HesapKisayolMenusu(); };
+            secimCubugu.Controls.AddRange(new Control[] { lblSecili, btnCevrimdisi, btnCevrimici, btnHesapKisayol });
+            Ekle(kok, secimCubugu, false);
+            kartlar.SeciliDegisti += delegate { SecimGoster(); };
+
             lblMesaj = Yazi();
             lblMesaj.Margin = new Padding(0, P(6), 0, 0);
             Ekle(kok, lblMesaj, false);
@@ -2234,6 +2267,9 @@ namespace SteamOfflineTool
             lblBaslik.Text = "STEAM";                           // 1.4: her dilde ayni
             lblBaslik2.Text = "OFFLINE TOOL";
             btnTema.Text = Tema.Acik ? "☾" : "☀";
+            btnCevrimdisi.Text = Dil.T("Open Offline", "Çevrimdışı Aç");
+            btnCevrimici.Text = Dil.T("Open Online", "Çevrimiçi Aç");
+            btnHesapKisayol.Text = Dil.T("Shortcut ▾", "Kısayol ▾");
             ipucu.SetToolTip(btnTema, Tema.Acik ? Dil.T("Dark theme", "Koyu tema") : Dil.T("Light theme", "Açık tema"));
             // 1.4: pencerede yazan aciklamalar (ust not, isaretler, kullanim) ⓘ'nin ustune gelince
             ipucu.SetToolTip(lblBilgi, Dil.T(
@@ -2244,7 +2280,7 @@ namespace SteamOfflineTool
                 + "always fixed while Steam is closed (✖: hover over the mark for details).\n"
                 + "Dot on the picture: last mode (gray offline, green online).\n"
                 + "Click a card's bottom line to write a note. Right-click an account for a desktop shortcut that opens it directly.\n\n"
-                + "Double-click an account (or press Enter): open it offline or online.\n"
+                + "Click an account: Open offline / Open online / Shortcut appear at the bottom (Enter: the same as a menu).\n"
                 + "Steam button at the top: green running, gray closed; click it to close Steam.\n"
                 + "Desktop shortcut button: the program itself or the selected account.\n"
                 + "Windows Update light: off green, partly off orange, on gray. Click it to turn updates off (green); \u21bb restores the default (gray).",
@@ -2255,7 +2291,7 @@ namespace SteamOfflineTool
                 + "ayarlar Steam kapalıyken her zaman düzeltilir (✖: ayrıntı için işaretin üzerine gel).\n"
                 + "Resimdeki nokta: son mod (gri çevrimdışı, yeşil çevrimiçi).\n"
                 + "Not için kartın alt satırına tıkla. Hesabı doğrudan açan masaüstü kısayolu için hesaba sağ tıkla.\n\n"
-                + "Hesaba çift tıkla (ya da Enter): çevrimdışı ya da çevrimiçi aç.\n"
+                + "Hesaba tıkla: altta Çevrimdışı Aç / Çevrimiçi Aç / Kısayol çıkar (Enter: aynısı menü olarak).\n"
                 + "Üstteki Steam düğmesi: açık yeşil, kapalı gri; basınca Steam'i kapatır.\n"
                 + "Masaüstüne kısayol: programın kendisi ya da seçili hesap.\n"
                 + "Windows Update ışığı: kapalı yeşil, kısmen kapalı turuncu, açık gri. Basınca güncellemeleri kapatır (yeşil); \u21bb varsayılana döndürür (gri)."));
@@ -2451,7 +2487,27 @@ namespace SteamOfflineTool
         void Mesgul(bool m)
         {
             mesgul = m;
+            btnCevrimdisi.Enabled = btnCevrimici.Enabled = !m;
             UseWaitCursor = m;
+        }
+
+        // alttaki secim seridi: secili hesap varsa gorunur
+        void SecimGoster()
+        {
+            Hesap h = SeciliHesap();
+            if (h != null) lblSecili.Text = h.Persona.Length > 0 ? h.Persona : h.Ad;
+            secimCubugu.Visible = h != null;
+        }
+
+        // seritteki kisayol dugmesi: secili hesabin masaustu kisayolu (cevrimdisi / cevrimici)
+        void HesapKisayolMenusu()
+        {
+            if (SeciliHesap() == null) return;
+            var m = new ContextMenuStrip();
+            m.Items.Add(Dil.T("Desktop shortcut: open offline", "Masaüstü kısayolu: çevrimdışı aç"), null, delegate { HesapKisayolu("1"); });
+            m.Items.Add(Dil.T("Desktop shortcut: open online", "Masaüstü kısayolu: çevrimiçi aç"), null, delegate { HesapKisayolu("0"); });
+            m.Closed += delegate { BeginInvoke(new Action(m.Dispose)); };
+            m.Show(btnHesapKisayol, new Point(0, btnHesapKisayol.Height));
         }
 
         // ---------------------------------------------------------- 1.4: cift tik, Steam isigi, kisayol secenekleri
@@ -2468,7 +2524,7 @@ namespace SteamOfflineTool
             return b;
         }
 
-        // hesaba cift tik (ya da Enter): iki secenek, tiklayinca acar
+        // hesaba tik (ya da Enter): kartin altinda cevrimdisi / cevrimici ac ve masaustu kisayolu
         void AcmaMenusu(Hesap h, Point yer)
         {
             if (mesgul) return;
@@ -2478,6 +2534,9 @@ namespace SteamOfflineTool
             acmaMenu.Items.Clear();
             acmaMenu.Items.Add(new ToolStripMenuItem(Dil.T("Open offline", "Çevrimdışı aç"), Nokta(Tema.Cevrimdisi, P(16)), delegate { Ac("1", h); }) { Font = kalin });
             acmaMenu.Items.Add(new ToolStripMenuItem(Dil.T("Open online", "Çevrimiçi aç"), Nokta(Tema.Yesil, P(16)), delegate { Ac("0", h); }) { Font = kalin });
+            acmaMenu.Items.Add(new ToolStripSeparator());
+            acmaMenu.Items.Add(Dil.T("Desktop shortcut: open offline", "Masaüstü kısayolu: çevrimdışı aç"), null, delegate { HesapKisayolu("1"); });
+            acmaMenu.Items.Add(Dil.T("Desktop shortcut: open online", "Masaüstü kısayolu: çevrimiçi aç"), null, delegate { HesapKisayolu("0"); });
             acmaMenu.Show(yer);
         }
 
@@ -2563,7 +2622,7 @@ namespace SteamOfflineTool
                             + "\n" + Dil.T("Last mode: ", "Son mod: ") + ModAdi(h.Wants)
                             + "\n" + Dil.T("Last sign-in: ", "Son giriş: ") + Tarih(h.Zaman)
                             + (sonKullanilan ? "\n" + Dil.T("Last used account", "Son kullanılan hesap") : "")
-                            + "\n\n" + Dil.T("Double-click: open offline / online", "Çift tık: çevrimdışı / çevrimiçi aç")
+                            + "\n\n" + Dil.T("Click: open offline / online at the bottom", "Tıkla: altta çevrimdışı / çevrimiçi aç")
                             + "\n" + Dil.T("Right-click: create a desktop shortcut", "Sağ tık: masaüstü kısayolu oluştur")
                 };
                 AyarIsareti(h, o);
