@@ -19,7 +19,7 @@ Made for playing single-player games offline without Steam starting big updates,
 - **Status lights:** Steam (green running, gray closed) at the top; Windows Update at the bottom right (green off, orange partly off, gray on).
 - **Windows Update off / back to default** – click the Windows Update light to turn updates off, ↻ restores the default (Chris Titus WinUtil "Disable Updates" steps, asks for administrator permission).
 - **Update check** – at startup the tool asks GitHub once for the latest version. If there is a newer one, the version at the top right turns yellow; click it and the tool downloads it, closes, installs it into its own folder and opens again (notes and settings are kept).
-- **English / Türkçe** interface (English by default, buttons at the top right). Help texts are on the ⓘ next to the title. The window size and position are remembered.
+- **English / Türkçe** interface (English by default, the language button at the top right switches). Help texts are on the ⓘ next to the title. The window size and position are remembered.
 - No installer, no account passwords: it only edits Steam's own local files while Steam is closed.
 
 ## Download and run

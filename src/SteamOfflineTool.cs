@@ -1030,41 +1030,43 @@ namespace SteamOfflineTool
     // ------------------------------------------------------------------ tema (1.4): koyu (varsayilan) ya da acik
 
     // Renkler her cizimde buradan okunur; Acik degisince (ustteki dugme) pencere yeniden boyanir. Secim kayit defterinde.
+    // Renkler Meric'in canli panelindeki gibi (koyu: #181A20 zemin, #1E2329 kart, #2B3139 cizgi, sari vurgu #F0B90B).
     public static class Tema
     {
         public static bool Acik = UygulamaAyari.Oku("AcikTema", false);
 
         static Color R(int ar, int ag, int ab, int kr, int kg, int kb) { return Acik ? Color.FromArgb(ar, ag, ab) : Color.FromArgb(kr, kg, kb); }
 
-        public static Color Arka { get { return R(243, 244, 246, 24, 25, 28); } }               // pencere
-        public static Color Kart { get { return R(255, 255, 255, 34, 36, 41); } }               // hesap karti, Windows Update karti
-        public static Color KartUstunde { get { return R(246, 248, 251, 43, 46, 52); } }
-        public static Color KartSecili { get { return R(232, 240, 254, 36, 48, 68); } }
-        public static Color Kenar { get { return R(214, 218, 224, 55, 59, 66); } }
-        public static Color Metin { get { return R(31, 35, 40, 232, 234, 237); } }
-        public static Color Soluk { get { return R(96, 103, 112, 150, 157, 167); } }              // ikincil yazi
-        public static Color Vurgu { get { return R(26, 115, 232, 56, 132, 255); } }               // secili kart, ana buton
-        public static Color VurguUstunde { get { return R(51, 133, 240, 82, 150, 255); } }
-        public static Color VurguBasili { get { return R(20, 95, 200, 38, 104, 214); } }
-        public static Color Buton { get { return R(255, 255, 255, 46, 49, 56); } }
-        public static Color ButonUstunde { get { return R(240, 242, 245, 57, 61, 69); } }
-        public static Color ButonBasili { get { return R(226, 230, 235, 68, 73, 82); } }
-        public static Color ButonPasif { get { return R(240, 241, 243, 36, 38, 43); } }
-        public static Color KenarPasif { get { return R(224, 227, 231, 46, 49, 55); } }
-        public static Color YaziPasif { get { return R(160, 166, 175, 105, 110, 119); } }
-        public static Color OdakKenar { get { return R(26, 115, 232, 150, 190, 255); } }
-        public static Color KutuKenar { get { return R(150, 157, 167, 88, 94, 104); } }          // onay kutusu
-        public static Color NotRengi { get { return R(30, 64, 175, 125, 180, 255); } }
-        public static Color NotYeri { get { return R(160, 166, 175, 98, 105, 116); } }            // "+ not"
-        public static Color Giris { get { return R(255, 255, 255, 18, 19, 22); } }                // not yazma kutusu
-        public static Color Ipucu { get { return R(255, 255, 255, 40, 43, 49); } }
-        public static Color Menu { get { return R(255, 255, 255, 36, 38, 43); } }
-        public static Color MenuSecili { get { return R(232, 240, 254, 52, 57, 66); } }
-        public static Color Yesil { get { return R(27, 122, 52, 72, 199, 116); } }
-        public static Color Kirmizi { get { return R(198, 40, 40, 244, 99, 99); } }
-        public static Color Turuncu { get { return R(200, 95, 0, 240, 150, 70); } }
-        public static Color Cevrimdisi { get { return R(140, 146, 156, 128, 134, 144); } }      // son mod noktasi
-        public static Color Sari { get { return R(202, 138, 4, 250, 204, 21); } }                // yeni surum var
+        public static Color Arka { get { return R(250, 250, 250, 24, 26, 32); } }               // pencere
+        public static Color Kart { get { return R(255, 255, 255, 30, 35, 41); } }               // hesap karti, Windows Update karti
+        public static Color KartUstunde { get { return R(245, 245, 245, 37, 42, 49); } }
+        public static Color KartSecili { get { return R(255, 249, 230, 43, 49, 57); } }
+        public static Color Kenar { get { return R(234, 236, 239, 43, 49, 57); } }
+        public static Color Metin { get { return R(30, 35, 41, 234, 236, 239); } }
+        public static Color Soluk { get { return R(112, 122, 138, 132, 142, 156); } }              // ikincil yazi
+        public static Color Vurgu { get { return R(252, 213, 53, 240, 185, 11); } }               // secili kart, ana buton
+        public static Color VurguUstunde { get { return R(240, 185, 11, 252, 213, 53); } }
+        public static Color VurguBasili { get { return R(217, 166, 9, 217, 166, 9); } }
+        public static Color VurguYazi { get { return R(30, 35, 41, 24, 26, 32); } }               // sari dugme uzerindeki yazi
+        public static Color Buton { get { return R(245, 245, 245, 43, 49, 57); } }
+        public static Color ButonUstunde { get { return R(234, 236, 239, 54, 61, 71); } }
+        public static Color ButonBasili { get { return R(221, 224, 229, 64, 71, 82); } }
+        public static Color ButonPasif { get { return R(245, 245, 245, 30, 35, 41); } }
+        public static Color KenarPasif { get { return R(234, 236, 239, 43, 49, 57); } }
+        public static Color YaziPasif { get { return R(183, 189, 198, 94, 102, 115); } }
+        public static Color OdakKenar { get { return R(201, 148, 0, 252, 213, 53); } }
+        public static Color KutuKenar { get { return R(146, 154, 165, 94, 102, 115); } }          // onay kutusu
+        public static Color NotRengi { get { return R(201, 148, 0, 240, 185, 11); } }
+        public static Color NotYeri { get { return R(146, 154, 165, 94, 102, 115); } }            // "+ not"
+        public static Color Giris { get { return R(255, 255, 255, 24, 26, 32); } }                // not yazma kutusu
+        public static Color Ipucu { get { return R(255, 255, 255, 43, 49, 57); } }
+        public static Color Menu { get { return R(255, 255, 255, 30, 35, 41); } }
+        public static Color MenuSecili { get { return R(245, 245, 245, 43, 49, 57); } }
+        public static Color Yesil { get { return R(2, 192, 118, 14, 203, 129); } }
+        public static Color Kirmizi { get { return R(207, 48, 74, 246, 70, 93); } }
+        public static Color Turuncu { get { return R(214, 110, 0, 255, 140, 40); } }
+        public static Color Cevrimdisi { get { return R(146, 154, 165, 94, 102, 115); } }      // son mod noktasi
+        public static Color Sari { get { return R(183, 134, 11, 240, 185, 11); } }                // yeni surum var
 
         static float oran;
 
@@ -1166,13 +1168,14 @@ namespace SteamOfflineTool
             Color zemin = !Enabled ? Tema.ButonPasif
                         : ana ? (basili ? Tema.VurguBasili : ustunde ? Tema.VurguUstunde : Tema.Vurgu)
                         : (basili ? Tema.ButonBasili : ustunde ? Tema.ButonUstunde : Tema.Buton);
-            Color kenar = !Enabled ? Tema.KenarPasif : Focused && ShowFocusCues ? Tema.OdakKenar : ana ? zemin : Tema.Kenar;
-            using (GraphicsPath yol = Tema.Yuvarlak(new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), 4f * Tema.Oran))
+            // koyu temada ikincil dugme cizgisiz (panel gibi), acik temada ince cizgi
+            Color kenar = !Enabled ? Tema.KenarPasif : Focused && ShowFocusCues ? Tema.OdakKenar : ana || !Tema.Acik ? zemin : Tema.Kenar;
+            Color yazi = !Enabled ? Tema.YaziPasif : ana ? Tema.VurguYazi : Tema.Metin;
+            using (GraphicsPath yol = Tema.Yuvarlak(new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), 8f * Tema.Oran))
             {
                 using (var f = new SolidBrush(zemin)) g.FillPath(f, yol);
                 using (var k = new Pen(kenar)) g.DrawPath(k, yol);
             }
-            Color yazi = !Enabled ? Tema.YaziPasif : ana ? Color.White : Tema.Metin;
             TextRenderer.DrawText(g, Text, Font, ClientRectangle, yazi, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter
                                   | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
         }
@@ -1213,7 +1216,7 @@ namespace SteamOfflineTool
                     g.DrawPath(p, yol);
             }
             if (Checked)
-                using (var p = new Pen(Color.White, Math.Max(1.6f, 1.8f * Tema.Oran)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+                using (var p = new Pen(Tema.VurguYazi, Math.Max(1.6f, 1.8f * Tema.Oran)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
                     g.DrawLines(p, new[] { new PointF(k * 0.25f, y + k * 0.52f), new PointF(k * 0.43f, y + k * 0.71f), new PointF(k * 0.76f, y + k * 0.31f) });
             var yazi = new Rectangle(k + Bosluk, 0, Width - k - Bosluk, Height);
             TextRenderer.DrawText(g, Text, Font, yazi, Enabled ? Tema.Metin : Tema.Soluk, TextFormatFlags.VerticalCenter | TextFormatFlags.Left
@@ -1283,20 +1286,20 @@ namespace SteamOfflineTool
             Graphics g = e.Graphics;
             g.Clear(Parent != null ? Parent.BackColor : Tema.Arka);
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            if (kutulu)                                     // dugme gibi: kutu, ustune gelince acik renk
-                using (GraphicsPath kutu = Tema.Yuvarlak(new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), 4f * Tema.Oran))
+            if (kutulu)                                     // dugme gibi: kutu, ustune gelince acik renk (koyu temada cizgisiz)
+                using (GraphicsPath kutu = Tema.Yuvarlak(new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), 8f * Tema.Oran))
                 {
-                    using (var f = new SolidBrush(ustunde && Enabled && Cursor == Cursors.Hand ? Tema.ButonUstunde : Tema.Buton)) g.FillPath(f, kutu);
-                    using (var k = new Pen(Tema.Kenar)) g.DrawPath(k, kutu);
+                    Color zemin = ustunde && Enabled && Cursor == Cursors.Hand ? Tema.ButonUstunde : Tema.Buton;
+                    using (var f = new SolidBrush(zemin)) g.FillPath(f, kutu);
+                    using (var k = new Pen(Tema.Acik ? Tema.Kenar : zemin)) g.DrawPath(k, kutu);
                 }
             int yaziEni = yazi.Length > 0 ? TextRenderer.MeasureText(yazi, Font).Width : 0;
-            float d = O(18), x = Ic + (yazi.Length > 0 ? yaziEni + O(4) : O(2)), y = (Height - d) / 2f, ic = O(12);
+            // paneldeki durum noktasi gibi: dolu nokta, yaniyorken etrafinda %16 halka
+            float d = O(18), x = Ic + (yazi.Length > 0 ? yaziEni + O(4) : O(2)), y = (Height - d) / 2f, ic = O(10);
             Color renk = acik ? (this.renk ?? Tema.Yesil) : Tema.Cevrimdisi;
-            if (acik)                                       // yaniyor: etrafinda hafif hale
-                using (var hale = new SolidBrush(Color.FromArgb(70, renk))) g.FillEllipse(hale, x, y, d, d);
+            if (acik)
+                using (var hale = new SolidBrush(Color.FromArgb(48, renk))) g.FillEllipse(hale, x, y, d, d);
             using (var f = new SolidBrush(renk)) g.FillEllipse(f, x + (d - ic) / 2f, y + (d - ic) / 2f, ic, ic);
-            using (var parlak = new SolidBrush(Color.FromArgb(acik ? 120 : 60, Color.White)))   // ustte kucuk parlama
-                g.FillEllipse(parlak, x + (d - ic) / 2f + ic * 0.22f, y + (d - ic) / 2f + ic * 0.16f, ic * 0.38f, ic * 0.3f);
             if (yazi.Length > 0)
                 TextRenderer.DrawText(g, yazi, Font, new Rectangle(Ic, 0, yaziEni + O(2), Height),
                                       acik ? renk : Tema.Soluk, TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
@@ -1801,10 +1804,10 @@ namespace SteamOfflineTool
             Color zemin = sec ? Tema.KartSecili : ust ? Tema.KartUstunde : Tema.Kart;
             float kalinlik = sec ? Math.Max(2f, 2f * olcek) : 1f;
             var dis = new RectangleF(r.X + kalinlik / 2f, r.Y + kalinlik / 2f, r.Width - kalinlik, r.Height - kalinlik);
-            using (GraphicsPath yol = Tema.Yuvarlak(dis, P(8)))
+            using (GraphicsPath yol = Tema.Yuvarlak(dis, P(12)))
             {
                 using (var f = new SolidBrush(zemin)) g.FillPath(f, yol);
-                Color kenar = sec ? Tema.Vurgu : o.SonKullanilan ? Color.FromArgb(120, Tema.Vurgu) : Tema.Kenar;
+                Color kenar = sec ? Tema.Vurgu : o.SonKullanilan ? Color.FromArgb(110, Tema.Vurgu) : Tema.Kenar;
                 using (var k = new Pen(kenar, kalinlik)) g.DrawPath(k, yol);
             }
             Rectangle a = ResimAlani(r);
@@ -2052,14 +2055,14 @@ namespace SteamOfflineTool
 
         HesapKartlari kartlar;
         KoyuButon btnCevrimdisi, btnCevrimici, btnKapat, btnWuVarsayilan;
-        Label lblMesaj;
+        Label lblMesaj, lblWu;
         DurumIsigi wuIsigi;             // 1.4: Windows Update kapali / kismen kapaliysa yesil; tiklayinca kapatir
         int wuDurum;                    // Guncelleme.Durum: 1 kapali, 0 acik (varsayilan), -1 kismen
         DurumIsigi steamIsigi;
         KoyuOnay chkBaslangic;
         const bool Duzelt = true;       // 1.4: Steam ayarlari her zaman duzeltilir (eskiden alttaki kutu: "yanlissa duzelt")
-        Label lblBaslik, lblDil, lblBilgi;
-        KoyuButon btnIngilizce, btnTurkce;
+        Label lblBaslik, lblBaslik2, lblBilgi;
+        KoyuButon btnDil;
         KoyuButon btnKisayol;
         ContextMenuStrip satirMenu, tepsiMenu;
         ToolStripMenuItem mnuKisayolCevrimdisi, mnuKisayolCevrimici, mnuNot;
@@ -2123,8 +2126,11 @@ namespace SteamOfflineTool
             ust.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             ust.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             var sol = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = new Padding(0) };
-            lblBaslik = new Label { AutoSize = true, Font = new Font(Font.FontFamily, 12f, FontStyle.Bold), Margin = new Padding(0, 0, P(10), 0) };
+            // baslik: "STEAM" sari (paneldeki vurgu), "OFFLINE TOOL" yazi renginde
+            lblBaslik = new Label { AutoSize = true, Font = new Font(Font.FontFamily, 12f, FontStyle.Bold), ForeColor = Tema.Sari, Margin = new Padding(0) };
+            lblBaslik2 = new Label { AutoSize = true, Font = lblBaslik.Font, Margin = new Padding(0, 0, P(10), 0) };
             sol.Controls.Add(lblBaslik);
+            sol.Controls.Add(lblBaslik2);
             steamIsigi = new DurumIsigi { Font = kalin, Margin = new Padding(0, P(3), 0, 0) };
             sol.Controls.Add(steamIsigi);
             lblBilgi = new Label { Text = "ⓘ", AutoSize = true, Font = new Font("Segoe UI Symbol", 11f), Cursor = Cursors.Help, ForeColor = Gri,
@@ -2139,10 +2145,13 @@ namespace SteamOfflineTool
                 Padding = new Padding(P(2), 0, P(2), 0), Margin = new Padding(0, 0, P(12), 0), Font = new Font("Segoe UI Symbol", 10.5f)
             };
             btnTema.Click += delegate { TemaDegistir(); };
-            lblDil = new Label { AutoSize = true, Margin = new Padding(0, P(5), P(6), 0) };
-            btnIngilizce = DilButonu("English", false);         // 1.4: acilir liste yerine iki dugme (koyu temada duzgun gorunur)
-            btnTurkce = DilButonu("Türkçe", true);
-            dil.Controls.AddRange(new Control[] { lblSurum, btnTema, lblDil, btnIngilizce, btnTurkce });
+            btnDil = new KoyuButon                              // 1.4: acilir liste yerine tek dugme: English <-> Turkce
+            {
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(P(76), P(28)),
+                Padding = new Padding(P(6), 0, P(6), 0), Margin = new Padding(0)
+            };
+            btnDil.Click += delegate { DilDegisti(!Dil.Turkce); };
+            dil.Controls.AddRange(new Control[] { lblSurum, btnTema, btnDil });
             ust.Controls.Add(sol, 0, 0);
             ust.Controls.Add(dil, 1, 0);
             ust.Margin = new Padding(0, 0, 0, P(8));
@@ -2181,7 +2190,7 @@ namespace SteamOfflineTool
             // Windows Update isigi: kapali yesil, kismen kapali turuncu, acik gri. Gri ya da turuncuyken basinca guncellemeleri
             // kapatir (yesil olur); ↻ varsayilana dondurur (gri olur).
             var altSag = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Right, Margin = new Padding(0) };
-            var lblWu = new Label { Text = "Windows Update", AutoSize = true, Font = kalin, Margin = new Padding(0, P(6), P(8), 0) };   // sabit yazi
+            lblWu = new Label { AutoSize = true, Font = kalin, Margin = new Padding(0, P(6), P(8), 0) };   // sabit yazi: "Windows Update kapali"
             wuIsigi = new DurumIsigi { Font = kalin, Cursor = Cursors.Hand, Kutulu = true, Margin = new Padding(0, 0, P(6), 0) };
             wuIsigi.Click += delegate { if (wuDurum != 1) YoneticiIslemi("--wu-kapat", WuKapatSorusu); };
             btnWuVarsayilan = new KoyuButon
@@ -2204,7 +2213,8 @@ namespace SteamOfflineTool
         // butun yazilar secili dilde (dil degisince yeniden cagrilir)
         void MetinleriUygula()
         {
-            lblBaslik.Text = "STEAM OFFLINE TOOL";             // 1.4: her dilde ayni
+            lblBaslik.Text = "STEAM";                           // 1.4: her dilde ayni
+            lblBaslik2.Text = "OFFLINE TOOL";
             btnTema.Text = Tema.Acik ? "☾" : "☀";
             ipucu.SetToolTip(btnTema, Tema.Acik ? Dil.T("Dark theme", "Koyu tema") : Dil.T("Light theme", "Açık tema"));
             btnCevrimdisi.Text = Dil.T("Open Offline", "Çevrimdışı Aç");
@@ -2231,11 +2241,11 @@ namespace SteamOfflineTool
                 + "Üstteki ışık: Steam açık (yeşil) ya da kapalı (gri).\n"
                 + "Windows Update ışığı: kapalı yeşil, kısmen kapalı turuncu, açık gri. Basınca güncellemeleri kapatır (yeşil); \u21bb varsayılana döndürür (gri)."));
             ipucu.SetToolTip(btnWuVarsayilan, Dil.T("Restore default (Windows Update back on)", "Varsayılana döndür (Windows Update yeniden açılır)"));
+            lblWu.Text = Dil.T("Windows Update off", "Windows Update kapalı");
             chkBaslangic.Text = Dil.T("Start with Windows", "Windows açılınca başlat");
             btnKisayol.Text = Dil.T("Desktop shortcut", "Masaüstüne kısayol");
-            lblDil.Text = Dil.T("Language:", "Dil:");
-            btnIngilizce.Ana = !Dil.Turkce;
-            btnTurkce.Ana = Dil.Turkce;
+            btnDil.Text = Dil.Turkce ? "Türkçe" : "English";
+            ipucu.SetToolTip(btnDil, Dil.T("Language: click for Türkçe", "Dil: English için tıkla"));
             mnuKisayolCevrimdisi.Text = Dil.T("Desktop shortcut: open offline", "Masaüstü kısayolu: çevrimdışı aç");
             mnuKisayolCevrimici.Text = Dil.T("Desktop shortcut: open online", "Masaüstü kısayolu: çevrimiçi aç");
             mnuNot.Text = Dil.T("Write note", "Not yaz");
@@ -2333,18 +2343,6 @@ namespace SteamOfflineTool
             };
         }
 
-        // dil dugmesi: secili dil mavi
-        KoyuButon DilButonu(string yazi, bool tr)
-        {
-            var b = new KoyuButon
-            {
-                Text = yazi, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(P(64), P(28)),
-                Padding = new Padding(P(4), 0, P(4), 0), Margin = new Padding(0, 0, P(4), 0)
-            };
-            b.Click += delegate { DilDegisti(tr); };
-            return b;
-        }
-
         HesapKartlari KartlarOlustur()
         {
             var k = new HesapKartlari(olcek, kalin, kucuk, ipucu) { Dock = DockStyle.Fill, Margin = new Padding(0) };
@@ -2388,6 +2386,7 @@ namespace SteamOfflineTool
             BackColor = Tema.Arka;
             ForeColor = Tema.Metin;
             lblBilgi.ForeColor = Gri;
+            lblBaslik.ForeColor = Tema.Sari;
             lblMesaj.ForeColor = MesajRengi();
             kartlar.TemaYenile();
             MetinleriUygula();
@@ -2561,12 +2560,14 @@ namespace SteamOfflineTool
             string ayrinti;
             int d = Guncelleme.Durum(out ayrinti);
             wuDurum = d;
-            wuIsigi.Ayarla(d != 0, d == 1 ? Dil.T("off", "kapalı") : d == 0 ? Dil.T("on", "açık") : Dil.T("partly off", "kısmen kapalı"),
-                           d == -1 ? Turuncu : Yesil);
+            wuIsigi.Ayarla(d != 0, "", d == -1 ? Turuncu : Yesil);     // yazisiz dugme: kapali yesil, kismen turuncu, acik gri
             wuIsigi.Invalidate();                   // tema degisince de yeniden boyansin
-            ipucu.SetToolTip(wuIsigi, (d == 1 ? Dil.T("Windows Update is off. ↻ restores the default.", "Windows Update kapalı. ↻ varsayılana döndürür.")
-                                              : Dil.T("Click to turn off updates.", "Güncellemeleri kapatmak için tıkla."))
-                                      + "\n" + ayrinti);       // 1.4: servis ayrintisi ipucunda (pencere daha kucuk)
+            string durum = d == 1 ? Dil.T("Windows Update is off. ↻ restores the default.", "Windows Update kapalı. ↻ varsayılana döndürür.")
+                         : d == -1 ? Dil.T("Partly off: Windows turned some of it back on. Click to turn it fully off.",
+                                           "Kısmen kapalı: Windows bir kısmını geri açmış. Tamamen kapatmak için tıkla.")
+                         : Dil.T("On (Windows default). Click to turn updates off.", "Açık (Windows varsayılanı). Kapatmak için tıkla.");
+            ipucu.SetToolTip(wuIsigi, durum + "\n" + ayrinti);       // 1.4: servis ayrintisi ipucunda (pencere daha kucuk)
+            ipucu.SetToolTip(lblWu, durum + "\n" + ayrinti);
             if (!wuCalisiyor)
             {
                 wuIsigi.Enabled = true;
