@@ -1565,13 +1565,17 @@ namespace SteamOfflineTool
 
     // ------------------------------------------------------------------ hesap kartlari (1.4)
 
-    // Hesaplar kart kart: profil resmi, profil adi, hesap, not, ayar isareti (sag ust) ve son mod
-    // noktasi (resmin sag alti). Tek kontrol, kartlari kendisi cizer; not, kartin alt satirina tiklayinca yerinde yazilir.
+    // Hesaplar kart kart: ustte Shortcut (solda) ve ayar isareti (sagda), profil resmi (sag altinda son mod noktasi), profil adi,
+    // hesap, not ve en altta Offline / Online dugmeleri. Dugmeler tek kartta gorunur: farenin ustunde oldugu, fare kartlarda degilse
+    // secili kart (once secmek gerekmez, kartlar sade durur, boyu degismez). Tek kontrol, kartlari ve dugmeleri kendisi cizer; not,
+    // not satirina tiklayinca yerinde yazilir.
     public class HesapKartlari : Panel
     {
-        public const int ResimBoyu = 68;
-        const int KartEni = 116, KartBoyu = 142, Aralik = 8;
+        public const int ResimBoyu = 64;
+        const int KartEni = 116, KartBoyu = 178, Aralik = 8;
+        const int ResimUst = 24;                             // resmin ustundeki satir: solda Shortcut, sagda ayar isareti
         static readonly int[] SatirUstu = { 0, 18, 34 };     // isim, hesap, not satirlari (resmin altindan)
+        const int Diger = 0, Isaret = 1, NotSatiri = 2, Cevrimdisi = 3, Cevrimici = 4, Kisayol = 5;     // kartin parcalari
 
         public class Oge
         {
@@ -1580,22 +1584,25 @@ namespace SteamOfflineTool
             public string Isim = "", Alt = "", Not = "", Rozet = "", RozetIpucu = "", Ipucu = "";
             public Color RozetRengi;
             public bool SonKullanilan;
+            public bool RozetHep = true;        // ✖ / ? hep gorunur; ✔ yalnizca dugmeli kartta (bkz. Aktif)
             public bool? Cevrimdisi;            // son mod: true cevrimdisi, false cevrimici, null bilinmiyor
         }
 
         readonly float olcek;
-        readonly Font kalin, kucuk, rozetYazisi;
+        readonly Font kalin, kucuk, rozetYazisi, dugmeYazisi, kisayolYazisi;
         readonly KoyuIpucu ipucu;
         readonly TextBox notKutusu;
         readonly System.Windows.Forms.Timer ipucuZamani;
         List<Oge> ogeler = new List<Oge>();
-        int secili = -1, ustunde = -1, duzenlenen = -1;
+        int secili = -1, ustunde = -1, ustundeBolum = -1, duzenlenen = -1, basilan = -1;
+        int dugmeKarti = -1;                                 // farenin son geldigi kart (fare kartlarin disina cikinca -1)
+        bool dugmelerAcik = true;
         string ipucuAnahtari, bekleyenIpucu;
         Point ipucuYeri;
         public string NotIpucu = "", NotYeri = "", BosYazi = "";     // BosYazi: hic hesap yokken ortada
         public event Action<Hesap, string> NotDegisti;      // not yazildi ya da vazgecildi (yazi degismemis olabilir)
-        public event Action<Hesap, Point> AcmaIstendi;      // Enter: kartin altinda acma ve kisayol secenekleri (ekran konumu)
-        public event EventHandler SeciliDegisti;            // alttaki secim seridi (cevrimdisi / cevrimici ac, kisayol)
+        public event Action<Hesap, string> AcIstendi;       // karttaki Offline ("1") / Online ("0") dugmesi ya da Enter (Offline)
+        public event Action<Hesap, Point> KisayolIstendi;   // karttaki Shortcut: masaustu kisayolu menusu (ekran noktasi)
 
         public HesapKartlari(float olcek, Font kalin, Font kucuk, KoyuIpucu ipucu)
         {
@@ -1604,6 +1611,8 @@ namespace SteamOfflineTool
             this.kucuk = kucuk;
             this.ipucu = ipucu;
             rozetYazisi = new Font("Segoe UI Symbol", 10f, FontStyle.Bold);
+            dugmeYazisi = new Font(kucuk, FontStyle.Bold);
+            kisayolYazisi = new Font("Segoe UI", 7.5f, FontStyle.Bold);
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer
                      | ControlStyles.ResizeRedraw | ControlStyles.Selectable, true);
             BackColor = Tema.Arka;
@@ -1628,6 +1637,15 @@ namespace SteamOfflineTool
 
         public bool NotDuzenleniyor { get { return duzenlenen >= 0; } }
 
+        // Shortcut, Offline / Online hep tek kartta: farenin ustunde oldugu kart, fare kartlarda degilse secili kart
+        int Aktif { get { return dugmeKarti >= 0 ? dugmeKarti : secili; } }
+
+        // mesgulken (Steam aciliyor) Offline / Online dugmeleri pasif
+        public bool DugmelerAcik
+        {
+            set { dugmelerAcik = value; Invalidate(); }
+        }
+
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
@@ -1642,12 +1660,11 @@ namespace SteamOfflineTool
                 if (o.Resim != null) o.Resim.Dispose();
             ogeler = yeni;
             secili = secAd == null ? -1 : ogeler.FindIndex(o => o.Hesap.Ad.Equals(secAd, StringComparison.OrdinalIgnoreCase));
-            ustunde = -1;
+            ustunde = ustundeBolum = dugmeKarti = -1;
             IpucuKapat();
             Yerlestir();
             Invalidate();
             if (secili >= 0) Gorunur(secili);
-            if (SeciliDegisti != null) SeciliDegisti(this, EventArgs.Empty);
         }
 
         public void Sec(string ad)
@@ -1661,9 +1678,9 @@ namespace SteamOfflineTool
             if (i == secili) return;
             NotuBitir();
             secili = i;
+            dugmeKarti = -1;                                // klavyeyle secince dugmeler secili karta gecer
             Invalidate();
             if (i >= 0) Gorunur(i);
-            if (SeciliDegisti != null) SeciliDegisti(this, EventArgs.Empty);
         }
 
         // ---------------------------------------------------------- yerlesim
@@ -1691,15 +1708,27 @@ namespace SteamOfflineTool
         Rectangle ResimAlani(Rectangle r)
         {
             int a = P(ResimBoyu);
-            return new Rectangle(r.X + (r.Width - a) / 2, r.Y + P(10), a, a);
+            return new Rectangle(r.X + (r.Width - a) / 2, r.Y + P(ResimUst), a, a);
         }
 
         Rectangle SatirAlani(Rectangle r, int sira)
         {
-            return new Rectangle(r.X + P(6), r.Y + P(10 + ResimBoyu + 5 + SatirUstu[sira]), r.Width - P(12), P(sira == 0 ? 17 : 15));
+            return new Rectangle(r.X + P(6), r.Y + P(ResimUst + ResimBoyu + 4 + SatirUstu[sira]), r.Width - P(12), P(sira == 0 ? 17 : 15));
         }
 
-        Rectangle RozetAlani(Rectangle r) { return new Rectangle(r.Right - P(25), r.Y + P(4), P(21), P(21)); }
+        Rectangle RozetAlani(Rectangle r) { return new Rectangle(r.Right - P(25), r.Y + P(3), P(21), P(21)); }
+
+        Rectangle KisayolAlani(Rectangle r)
+        {
+            return new Rectangle(r.X + P(5), r.Y + P(4), TextRenderer.MeasureText("Shortcut", kisayolYazisi).Width + P(8), P(18));
+        }
+
+        // en alttaki Offline / Online dugmeleri (yan yana)
+        Rectangle DugmeAlani(Rectangle r, bool cevrimdisi)
+        {
+            int x = r.X + P(8), en = r.Width - P(16), ara = P(4), yarim = (en - ara) / 2, boy = P(24), y = r.Bottom - P(8) - boy;
+            return cevrimdisi ? new Rectangle(x, y, yarim, boy) : new Rectangle(x + yarim + ara, y, en - yarim - ara, boy);
+        }
 
         Rectangle NotAlani(Rectangle r)
         {
@@ -1731,12 +1760,15 @@ namespace SteamOfflineTool
             return -1;
         }
 
-        // kartin neresi: 1 ayar isareti, 2 not satiri, 0 diger
+        // kartin neresi: Shortcut, ayar isareti, Offline, Online, not satiri ya da diger
         int Bolum(int i, Point p)
         {
             Rectangle r = KartAlani(i);
-            if (RozetAlani(r).Contains(p)) return 1;
-            return NotAlani(r).Contains(p) ? 2 : 0;
+            if (KisayolAlani(r).Contains(p)) return Kisayol;
+            if (RozetAlani(r).Contains(p)) return Isaret;
+            if (DugmeAlani(r, true).Contains(p)) return Cevrimdisi;
+            if (DugmeAlani(r, false).Contains(p)) return Cevrimici;
+            return i == secili && NotAlani(r).Contains(p) ? NotSatiri : Diger;     // not yalnizca secili kartta yazilir
         }
 
         protected override void OnResize(EventArgs e)
@@ -1773,15 +1805,17 @@ namespace SteamOfflineTool
             for (int i = 0; i < ogeler.Count; i++)
             {
                 Rectangle r = KartAlani(i);
-                if (r.IntersectsWith(e.ClipRectangle)) Ciz(g, ogeler[i], r, i == secili, i == ustunde);
+                if (r.IntersectsWith(e.ClipRectangle)) Ciz(g, ogeler[i], r, i == secili, i == Aktif, i == ustunde ? ustundeBolum : -1);
             }
             if (ogeler.Count == 0 && BosYazi.Length > 0)
                 TextRenderer.DrawText(g, BosYazi, kalin, ClientRectangle, Tema.Soluk, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter
                                       | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
         }
 
-        void Ciz(Graphics g, Oge o, Rectangle r, bool sec, bool ust)
+        // dugmeli: Shortcut, Offline / Online bu kartta (bkz. Aktif); ustBolum: fare bu kartin ustundeyse hangi parcasinda (-1: degil)
+        void Ciz(Graphics g, Oge o, Rectangle r, bool sec, bool dugmeli, int ustBolum)
         {
+            bool ust = ustBolum >= 0;
             Color zemin = sec ? Tema.KartSecili : ust ? Tema.KartUstunde : Tema.Kart;
             float kalinlik = sec ? Math.Max(2f, 2f * olcek) : 1f;
             var dis = new RectangleF(r.X + kalinlik / 2f, r.Y + kalinlik / 2f, r.Width - kalinlik, r.Height - kalinlik);
@@ -1801,11 +1835,40 @@ namespace SteamOfflineTool
             }
             const TextFormatFlags orta = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
                                        | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
-            if (o.Rozet.Length > 0) TextRenderer.DrawText(g, o.Rozet, rozetYazisi, RozetAlani(r), o.RozetRengi, orta);
+            if (o.Rozet.Length > 0 && (o.RozetHep || dugmeli)) TextRenderer.DrawText(g, o.Rozet, rozetYazisi, RozetAlani(r), o.RozetRengi, orta);
             TextRenderer.DrawText(g, o.Isim, kalin, SatirAlani(r, 0), Tema.Metin, orta);
             if (o.Alt.Length > 0) TextRenderer.DrawText(g, o.Alt, kucuk, SatirAlani(r, 1), Tema.Soluk, orta);
+            if (ustBolum == NotSatiri && duzenlenen < 0)    // not yazilabilir: ustune gelince ince sari cerceve
+            {
+                Rectangle n = NotAlani(r);
+                n.Inflate(-P(2), 0);
+                using (GraphicsPath yol = Tema.Yuvarlak(new RectangleF(n.X + 0.5f, n.Y + 0.5f, n.Width - 1f, n.Height - 1f), P(4)))
+                using (var k = new Pen(Tema.Vurgu)) g.DrawPath(k, yol);
+            }
             if (o.Not.Length > 0) TextRenderer.DrawText(g, o.Not, kucuk, SatirAlani(r, 2), Tema.NotRengi, orta);
-            else if (sec || ust) TextRenderer.DrawText(g, NotYeri, kucuk, SatirAlani(r, 2), Tema.NotYeri, orta);
+            else if (sec) TextRenderer.DrawText(g, NotYeri, kucuk, SatirAlani(r, 2), Tema.NotYeri, orta);
+
+            // Shortcut (sol ust), Offline (1.3'teki gibi mavi) ve Online (duz): yalnizca tek kartta (kartlar sade durur,
+            // boyu degismez); dugmenin ustune gelince acik renk ve sari cerceve
+            if (!dugmeli) return;
+            bool k1 = ustBolum == Kisayol, k2 = ustBolum == Cevrimdisi, k3 = ustBolum == Cevrimici;
+            DugmeCiz(g, KisayolAlani(r), "Shortcut", kisayolYazisi, k1 ? Tema.ButonUstunde : Tema.Buton, k1 ? Tema.Vurgu : Tema.Cerceve, Tema.Metin, P(5));
+            Color mavi = Color.FromArgb(26, 115, 232);
+            DugmeCiz(g, DugmeAlani(r, true), "Offline", dugmeYazisi, !dugmelerAcik ? Tema.ButonPasif : k2 ? Tema.Karistir(mavi, Color.White, 0.15f) : mavi,
+                     !dugmelerAcik ? Tema.KenarPasif : k2 ? Tema.Vurgu : mavi, dugmelerAcik ? Color.White : Tema.YaziPasif, P(7));
+            DugmeCiz(g, DugmeAlani(r, false), "Online", dugmeYazisi, !dugmelerAcik ? Tema.ButonPasif : k3 ? Tema.ButonUstunde : Tema.Buton,
+                     !dugmelerAcik ? Tema.KenarPasif : k3 ? Tema.Vurgu : Tema.Cerceve, dugmelerAcik ? Tema.Metin : Tema.YaziPasif, P(7));
+        }
+
+        static void DugmeCiz(Graphics g, Rectangle r, string yazi, Font f, Color zemin, Color kenar, Color renk, float yaricap)
+        {
+            using (GraphicsPath yol = Tema.Yuvarlak(new RectangleF(r.X + 0.5f, r.Y + 0.5f, r.Width - 1f, r.Height - 1f), yaricap))
+            {
+                using (var b = new SolidBrush(zemin)) g.FillPath(b, yol);
+                using (var k = new Pen(kenar)) g.DrawPath(k, yol);
+            }
+            TextRenderer.DrawText(g, yazi, f, r, renk, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
+                                  | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
         }
 
         // tema degisti: arka plan, not kutusu, kaydirma cubugu
@@ -1824,22 +1887,25 @@ namespace SteamOfflineTool
         {
             base.OnMouseMove(e);
             int i = Bul(e.Location);
-            if (i != ustunde)
+            int bolum = i >= 0 ? Bolum(i, e.Location) : -1;
+            if (i != ustunde || bolum != ustundeBolum)
             {
                 ustunde = i;
+                ustundeBolum = bolum;
+                if (i >= 0) dugmeKarti = i;                 // kartlarin arasindaki bosluktan gecerken dugmeler yerinde kalir
                 Invalidate();
             }
-            int bolum = i >= 0 ? Bolum(i, e.Location) : -1;
-            Cursor = bolum == 2 ? Cursors.IBeam : Cursors.Default;
+            Cursor = bolum == NotSatiri ? Cursors.IBeam
+                   : bolum == Kisayol || (dugmelerAcik && (bolum == Cevrimdisi || bolum == Cevrimici)) ? Cursors.Hand : Cursors.Default;
             IpucuAyarla(i, bolum, e.Location);
         }
 
         protected override void OnMouseLeave(EventArgs e)
         {
             base.OnMouseLeave(e);
-            if (ustunde != -1)
+            if (ustunde != -1 || dugmeKarti != -1)
             {
-                ustunde = -1;
+                ustunde = ustundeBolum = dugmeKarti = -1;   // dugmeler secili karta doner
                 Invalidate();
             }
             IpucuKapat();
@@ -1851,29 +1917,31 @@ namespace SteamOfflineTool
             IpucuKapat();
             Focus();
             int i = Bul(e.Location);
+            basilan = i >= 0 && i == Aktif ? i : -1;        // dugmeleri gorunmeyen karta tik: yalnizca secer
             if (i >= 0 && (e.Button == MouseButtons.Left || e.Button == MouseButtons.Right))
             {
+                bool notTiki = e.Button == MouseButtons.Left && Bolum(i, e.Location) == NotSatiri;     // kart zaten seciliyse
                 SeciliYap(i);
-                if (e.Button == MouseButtons.Left && Bolum(i, e.Location) == 2) NotuDuzenle();
+                if (notTiki) NotuDuzenle();
             }
             base.OnMouseDown(e);
         }
 
-        // tik (tek ya da cift) ve Enter: kartin hemen altinda [Offline] [Online]; not satirinda tik notu yazar
+        // karttaki dugmeler: Offline / Online acar, Shortcut masaustu kisayolu menusunu acar
         protected override void OnMouseClick(MouseEventArgs e)
         {
             base.OnMouseClick(e);
             if (e.Button != MouseButtons.Left) return;
             int i = Bul(e.Location);
-            if (i < 0 || Bolum(i, e.Location) == 2) return;
-            SecenekleriAc(i);
-        }
-
-        void SecenekleriAc(int i)
-        {
-            if (AcmaIstendi == null) return;
-            Rectangle r = KartAlani(i);
-            AcmaIstendi(ogeler[i].Hesap, PointToScreen(new Point(r.X, r.Bottom + P(2))));
+            if (i < 0 || i != basilan) return;
+            int bolum = Bolum(i, e.Location);
+            if ((bolum == Cevrimdisi || bolum == Cevrimici) && dugmelerAcik && AcIstendi != null)
+                AcIstendi(ogeler[i].Hesap, bolum == Cevrimdisi ? "1" : "0");
+            else if (bolum == Kisayol && KisayolIstendi != null)
+            {
+                Rectangle k = KisayolAlani(KartAlani(i));
+                KisayolIstendi(ogeler[i].Hesap, PointToScreen(new Point(k.X, k.Bottom + P(2))));
+            }
         }
 
         protected override bool IsInputKey(Keys tus)
@@ -1903,8 +1971,8 @@ namespace SteamOfflineTool
                     NotuDuzenle();
                     e.Handled = true;
                     return;
-                case Keys.Enter:                            // klavyeyle: secili kartin altinda acma secenekleri
-                    if (secili >= 0) SecenekleriAc(secili);
+                case Keys.Enter:                            // klavyeyle: secili hesabi Offline ac
+                    if (SeciliHesap != null && AcIstendi != null && dugmelerAcik) AcIstendi(SeciliHesap, "1");
                     e.Handled = true;
                     return;
                 default: return;
@@ -1921,7 +1989,12 @@ namespace SteamOfflineTool
             ipucuAnahtari = anahtar;
             if (i < 0) return;
             Oge o = ogeler[i];
-            bekleyenIpucu = bolum == 1 ? o.RozetIpucu : bolum == 2 ? NotIpucu + (o.Not.Length > 0 ? "\n" + o.Not : "") : o.Ipucu;
+            bekleyenIpucu = bolum == Isaret ? o.RozetIpucu
+                          : bolum == NotSatiri ? NotIpucu + (o.Not.Length > 0 ? "\n" + o.Not : "")
+                          : bolum == Cevrimdisi ? o.Isim + ": " + Dil.T("open offline", "çevrimdışı aç")
+                          : bolum == Cevrimici ? o.Isim + ": " + Dil.T("open online", "çevrimiçi aç")
+                          : bolum == Kisayol ? o.Isim + ": " + Dil.T("desktop shortcut (Offline / Online)", "masaüstü kısayolu (Offline / Online)")
+                          : o.Ipucu;
             ipucuYeri = new Point(p.X + P(12), p.Y + P(18));
             ipucuZamani.Start();
         }
@@ -1934,7 +2007,7 @@ namespace SteamOfflineTool
             ipucu.ElleGizle(this);
         }
 
-        // ---------------------------------------------------------- not (kartin alt satiri)
+        // ---------------------------------------------------------- not (kartin not satiri)
 
         public void NotuDuzenle()
         {
@@ -1947,6 +2020,7 @@ namespace SteamOfflineTool
             notKutusu.Text = ogeler[secili].Not;
             notKutusu.SetBounds(n.X, n.Y + (n.Height - notKutusu.PreferredHeight) / 2, n.Width, notKutusu.PreferredHeight);
             notKutusu.Visible = true;
+            Invalidate();
             notKutusu.Focus();
             notKutusu.SelectionStart = notKutusu.Text.Length;
         }
@@ -1986,6 +2060,8 @@ namespace SteamOfflineTool
                     if (o.Resim != null) o.Resim.Dispose();
                 ogeler.Clear();
                 rozetYazisi.Dispose();
+                dugmeYazisi.Dispose();
+                kisayolYazisi.Dispose();
                 ipucuZamani.Dispose();
             }
             base.Dispose(disposing);
@@ -2181,7 +2257,7 @@ namespace SteamOfflineTool
             // alt cubuk (tam genislik, kart rengi, ust cizgi): solda baslangic ve kisayol, sagda Windows Update
             var alt = altCubuk = Cubuk(false);
             var altSol = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = new Padding(0) };
-            lblBaslangic = new Label { AutoSize = true, Font = kalin, Margin = new Padding(0, P(6), P(8), 0) };
+            lblBaslangic = new Label { AutoSize = true, Margin = new Padding(0, P(7), P(8), 0) };
             baslangicIsigi = new DurumIsigi { Font = kalin, Kutulu = true, Cursor = Cursors.Hand, Margin = new Padding(0, 0, P(16), 0) };
             baslangicIsigi.Click += delegate { BaslangicDegisti(); };
             btnKisayol = Buton("", false);
@@ -2192,7 +2268,7 @@ namespace SteamOfflineTool
             // Windows Update isigi: kapali yesil, kismen kapali turuncu, acik gri. Gri ya da turuncuyken basinca guncellemeleri
             // kapatir (yesil olur); ↻ varsayilana dondurur (gri olur).
             var altSag = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Right, Margin = new Padding(0) };
-            lblWu = new Label { AutoSize = true, Font = kalin, Margin = new Padding(0, P(6), P(8), 0) };   // sabit yazi: "Windows Update kapali"
+            lblWu = new Label { AutoSize = true, Margin = new Padding(0, P(7), P(8), 0) };   // sabit yazi: "Windows Update kapali"
             wuIsigi = new DurumIsigi { Font = kalin, Cursor = Cursors.Hand, Kutulu = true, Margin = new Padding(0, 0, P(6), 0) };
             wuIsigi.Click += delegate { if (wuDurum != 1) YoneticiIslemi("--wu-kapat", WuKapatSorusu); };
             btnWuVarsayilan = new KoyuButon
@@ -2228,7 +2304,7 @@ namespace SteamOfflineTool
                 + "always fixed while Steam is closed (✖: hover over the mark for details).\n"
                 + "Dot on the picture: last mode (gray offline, green online).\n"
                 + "Click a card's bottom line to write a note. Right-click an account for a desktop shortcut that opens it directly.\n\n"
-                + "Click an account (or Enter): Offline / Online appear below it. Right-click: Offline / Online, desktop shortcut, note.\n"
+                + "Point at an account card: Offline / Online buttons at the bottom, Shortcut at the top left (desktop shortcut). Note: click the note line of the selected card. Right-click: the same as a menu.\n"
                 + "Steam button at the top: green running, gray closed; click it to close Steam.\n"
                 + "Shortcut button at the bottom: the program itself or any account (Offline / Online), no need to select it first.\n"
                 + "Windows Update light: off green, partly off orange, on gray. Click it to turn updates off (green); \u21bb restores the default (gray).",
@@ -2239,7 +2315,7 @@ namespace SteamOfflineTool
                 + "ayarlar Steam kapalıyken her zaman düzeltilir (✖: ayrıntı için işaretin üzerine gel).\n"
                 + "Resimdeki nokta: son mod (gri çevrimdışı, yeşil çevrimiçi).\n"
                 + "Not için kartın alt satırına tıkla. Hesabı doğrudan açan masaüstü kısayolu için hesaba sağ tıkla.\n\n"
-                + "Hesaba tıkla (ya da Enter): altında Offline / Online çıkar. Sağ tık: Offline / Online, masaüstü kısayolu, not.\n"
+                + "Kartın üstüne gel: altta Offline / Online düğmeleri, sol üstte Shortcut (masaüstü kısayolu). Not için seçili kartın not satırına tıkla. Sağ tık: aynıları menü olarak.\n"
                 + "Üstteki Steam düğmesi: açık yeşil, kapalı gri; basınca Steam'i kapatır.\n"
                 + "Alttaki Kısayol: programın kendisi ya da istediğin hesap (Offline / Online); önce seçmek gerekmez.\n"
                 + "Windows Update ışığı: kapalı yeşil, kısmen kapalı turuncu, açık gri. Basınca güncellemeleri kapatır (yeşil); \u21bb varsayılana döndürür (gri)."));
@@ -2372,9 +2448,17 @@ namespace SteamOfflineTool
         {
             var k = new HesapKartlari(olcek, kalin, kucuk, ipucu) { Dock = DockStyle.Fill, Margin = new Padding(0) };
             k.NotDegisti += NotKaydet;
-            k.AcmaIstendi += AcmaMenusu;
+            k.AcIstendi += (h, deger) => Ac(deger, h);      // karttaki Offline / Online
+            k.KisayolIstendi += (h, nokta) =>                // karttaki Shortcut (sol ust): masaustu kisayolu
+            {
+                var m = new ContextMenuStrip();
+                m.Items.Add(Dil.T("Desktop shortcut: Offline", "Masaüstü kısayolu: Offline"), null, delegate { HesapKisayolu("1", h); });
+                m.Items.Add(Dil.T("Desktop shortcut: Online", "Masaüstü kısayolu: Online"), null, delegate { HesapKisayolu("0", h); });
+                m.Closed += delegate { BeginInvoke(new Action(m.Dispose)); };
+                m.Show(nokta);
+            };
 
-            // hesaba sag tik ya da cift tik (1.4): Offline / Online ac, masaustu kisayolu, not
+            // hesaba sag tik (1.4): Offline / Online ac, masaustu kisayolu, not
             satirMenu = new ContextMenuStrip();
             mnuAcCevrimdisi = new ToolStripMenuItem("", Nokta(Tema.Cevrimdisi, P(16)), delegate { Ac("1"); }) { Font = kalin };
             mnuAcCevrimici = new ToolStripMenuItem("", Nokta(Tema.Yesil, P(16)), delegate { Ac("0"); }) { Font = kalin };
@@ -2464,6 +2548,7 @@ namespace SteamOfflineTool
         {
             mesgul = m;
             mnuAcCevrimdisi.Enabled = mnuAcCevrimici.Enabled = !m;
+            kartlar.DugmelerAcik = !m;
             UseWaitCursor = m;
         }
 
@@ -2479,26 +2564,6 @@ namespace SteamOfflineTool
                 g.FillEllipse(f, boy * 0.18f, boy * 0.18f, boy * 0.64f, boy * 0.64f);
             }
             return b;
-        }
-
-        // hesaba cift tik (ya da Enter): yan yana iki dugme, [Offline] [Online]; tiklayinca acar (sag tik: tam menu)
-        void AcmaMenusu(Hesap h, Point yer)
-        {
-            if (mesgul) return;
-            var panel = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Padding = new Padding(P(6)), Margin = new Padding(0), BackColor = Tema.Kart };
-            KoyuButon cevrimdisi = Buton("Offline", false), cevrimici = Buton("Online", false);
-            cevrimdisi.Font = cevrimici.Font = kalin;
-            cevrimdisi.MinimumSize = cevrimici.MinimumSize = new Size(P(96), P(30));
-            cevrimdisi.Dolgu = () => Color.FromArgb(26, 115, 232);     // 1.3'teki gibi: cevrimdisi mavi
-            cevrimdisi.DolguYazi = () => Color.White;
-            cevrimici.Margin = new Padding(0);
-            panel.Controls.AddRange(new Control[] { cevrimdisi, cevrimici });
-            var kutu = new ToolStripDropDown { Padding = Padding.Empty, BackColor = Tema.Kart };
-            kutu.Items.Add(new ToolStripControlHost(panel) { Margin = Padding.Empty, Padding = Padding.Empty, AutoSize = true });
-            cevrimdisi.Click += delegate { kutu.Close(); Ac("1", h); };
-            cevrimici.Click += delegate { kutu.Close(); Ac("0", h); };
-            kutu.Closed += delegate { BeginInvoke(new Action(kutu.Dispose)); };
-            kutu.Show(yer);
         }
 
         // Steam acikken isiga basinca: kapatayim mi?
@@ -2597,8 +2662,6 @@ namespace SteamOfflineTool
                             + "\n" + Dil.T("Last mode: ", "Son mod: ") + ModAdi(h.Wants)
                             + "\n" + Dil.T("Last sign-in: ", "Son giriş: ") + Tarih(h.Zaman)
                             + (sonKullanilan ? "\n" + Dil.T("Last used account", "Son kullanılan hesap") : "")
-                            + "\n\n" + Dil.T("Click: Offline / Online", "Tıkla: Offline / Online") + "\n" + Dil.T("Right-click: shortcut, note", "Sağ tık: kısayol, not")
-                            
                 };
                 AyarIsareti(h, o);
                 ogeler.Add(o);
@@ -2619,6 +2682,7 @@ namespace SteamOfflineTool
             else if (h.Sorunlar.Count == 0)
             {
                 o.Rozet = "✔";
+                o.RozetHep = false;
                 o.RozetRengi = Yesil;
                 o.RozetIpucu = string.Join("\n", KuralAdlari().Select(k => "✔ " + k));
             }
