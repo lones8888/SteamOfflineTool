@@ -2221,8 +2221,9 @@ namespace SteamOfflineTool
             lblBaslik.Text = "STEAM";                           // 1.4: her dilde ayni
             lblBaslik2.Text = "OFFLINE TOOL";
             btnTema.Text = Tema.Acik ? "☾" : "☀";
-            btnCevrimdisi.Text = Dil.T("Open Offline", "Çevrimdışı Aç");
-            btnCevrimici.Text = Dil.T("Open Online", "Çevrimiçi Aç");
+            lblSecili.Text = Dil.T("Open account", "Hesabı aç");      // sabit yazi, yaninda Offline / Online
+            btnCevrimdisi.Text = "Offline";
+            btnCevrimici.Text = "Online";
             ipucu.SetToolTip(btnTema, Tema.Acik ? Dil.T("Dark theme", "Koyu tema") : Dil.T("Light theme", "Açık tema"));
             // 1.4: pencerede yazan aciklamalar (ust not, isaretler, kullanim) ⓘ'nin ustune gelince
             ipucu.SetToolTip(lblBilgi, Dil.T(
@@ -2233,7 +2234,7 @@ namespace SteamOfflineTool
                 + "always fixed while Steam is closed (✖: hover over the mark for details).\n"
                 + "Dot on the picture: last mode (gray offline, green online).\n"
                 + "Click a card's bottom line to write a note. Right-click an account for a desktop shortcut that opens it directly.\n\n"
-                + "Click an account: Open Offline / Open Online appear at the bottom (Enter: the same as a menu).\n"
+                + "Click an account: \"Open account: Offline / Online\" appears at the bottom (Enter: the same as a menu).\n"
                 + "Steam button at the top: green running, gray closed; click it to close Steam.\n"
                 + "Shortcut button at the bottom: the program itself or the selected account.\n"
                 + "Windows Update light: off green, partly off orange, on gray. Click it to turn updates off (green); \u21bb restores the default (gray).",
@@ -2244,7 +2245,7 @@ namespace SteamOfflineTool
                 + "ayarlar Steam kapalıyken her zaman düzeltilir (✖: ayrıntı için işaretin üzerine gel).\n"
                 + "Resimdeki nokta: son mod (gri çevrimdışı, yeşil çevrimiçi).\n"
                 + "Not için kartın alt satırına tıkla. Hesabı doğrudan açan masaüstü kısayolu için hesaba sağ tıkla.\n\n"
-                + "Hesaba tıkla: altta Çevrimdışı Aç / Çevrimiçi Aç çıkar (Enter: aynısı menü olarak).\n"
+                + "Hesaba tıkla: altta \"Hesabı aç: Offline / Online\" çıkar (Enter: aynısı menü olarak).\n"
                 + "Üstteki Steam düğmesi: açık yeşil, kapalı gri; basınca Steam'i kapatır.\n"
                 + "Alttaki Kısayol: programın kendisi ya da seçili hesap.\n"
                 + "Windows Update ışığı: kapalı yeşil, kısmen kapalı turuncu, açık gri. Basınca güncellemeleri kapatır (yeşil); \u21bb varsayılana döndürür (gri)."));
@@ -2445,12 +2446,17 @@ namespace SteamOfflineTool
             UseWaitCursor = m;
         }
 
-        // alttaki secim seridi: secili hesap varsa gorunur
+        // alttaki secim seridi ("Hesabi ac: Offline / Online"): secili hesap varsa gorunur
         void SecimGoster()
         {
             Hesap h = SeciliHesap();
-            if (h != null) lblSecili.Text = h.Persona.Length > 0 ? h.Persona : h.Ad;
             secimCubugu.Visible = h != null;
+            if (h != null)
+            {
+                string ad = h.Persona.Length > 0 ? h.Persona + " (" + h.Ad + ")" : h.Ad;
+                ipucu.SetToolTip(btnCevrimdisi, ad + Dil.T(": open offline", ": çevrimdışı aç"));
+                ipucu.SetToolTip(btnCevrimici, ad + Dil.T(": open online", ": çevrimiçi aç"));
+            }
         }
 
         // ---------------------------------------------------------- 1.4: cift tik, Steam isigi, kisayol secenekleri
@@ -2565,7 +2571,7 @@ namespace SteamOfflineTool
                             + "\n" + Dil.T("Last mode: ", "Son mod: ") + ModAdi(h.Wants)
                             + "\n" + Dil.T("Last sign-in: ", "Son giriş: ") + Tarih(h.Zaman)
                             + (sonKullanilan ? "\n" + Dil.T("Last used account", "Son kullanılan hesap") : "")
-                            + "\n\n" + Dil.T("Click: open offline / online at the bottom", "Tıkla: altta çevrimdışı / çevrimiçi aç")
+                            + "\n\n" + Dil.T("Click: Open account (Offline / Online) at the bottom", "Tıkla: altta Hesabı aç (Offline / Online)")
                             + "\n" + Dil.T("Right-click: create a desktop shortcut", "Sağ tık: masaüstü kısayolu oluştur")
                 };
                 AyarIsareti(h, o);
