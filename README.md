@@ -10,15 +10,17 @@ Made for playing single-player games offline without Steam starting big updates,
 
 ## Features
 
-- **Account cards with the Steam profile picture**, dark theme, compact window. Accounts without a picture show their initial.
+- **Account cards with the Steam profile picture**, dark theme (light theme button at the top right), compact window. Accounts without a picture show their initial.
 - **Pick an account → Open Offline / Open Online.** If Steam is running, it is closed first (with your OK) and started again in the chosen mode.
 - **Desktop shortcut per account** – right-click an account → *Desktop shortcut: open offline/online*. One double-click opens Steam with that account, without the window. The shortcut's icon is the account's picture (gray dot = offline, green dot = online).
-- **Tray quick switch** – right-click the tray icon → *Open offline / Open online* → pick an account. An account with a note is shown there by its note.
+- **Tray quick switch** – right-click the tray icon → *Open offline / Open online* → pick an account (with pictures). An account with a note is shown there by its note.
 - **Notes** on each account card – click the card's bottom line or right-click → *Write note* (stored only on your PC).
-- **Settings check** (✔ / ✖ mark on each card): Steam Cloud off, Remote Play off, games update only when launched, account chooser off. Wrong settings are fixed while Steam is closed (optional checkbox; the account chooser is always turned off).
-- **Windows Update off / back to default** (Chris Titus WinUtil "Disable Updates" steps, asks for administrator permission).
-- **English / Türkçe** interface (English by default, buttons at the top right).
-- No installer, no internet, no account passwords: it only edits Steam's own local files while Steam is closed.
+- **Settings check** (✔ / ✖ mark on each card): Steam Cloud off, Remote Play off, games update only when launched, account chooser off. Wrong settings are always fixed while Steam is closed.
+- **Status lights:** Steam (green running, gray closed) at the top; Windows Update at the bottom right (green off, orange partly off, gray on).
+- **Windows Update off / back to default** – click the Windows Update light to turn updates off, ↻ restores the default (Chris Titus WinUtil "Disable Updates" steps, asks for administrator permission).
+- **Update check** – at startup the tool asks GitHub once for the latest version. If there is a newer one, the version at the top right turns yellow; click it and the tool downloads it, closes, installs it into its own folder and opens again (notes and settings are kept).
+- **English / Türkçe** interface (English by default, buttons at the top right). Help texts are on the ⓘ next to the title. The window size and position are remembered.
+- No installer, no account passwords: it only edits Steam's own local files while Steam is closed.
 
 ## Download and run
 
@@ -52,17 +54,19 @@ For offline mode the account must have signed in once on this PC with **Remember
 
 Profile pictures come from Steam's own local cache (`Steam\config\avatarcache\<SteamID64>.png`). `steam_hesap.py` copies them to the `avatarlar` folder next to the exe, so the window still never touches Steam's files.
 
+Updates are done by `guncelle.py` (also Python): it reads the latest release from the GitHub API, downloads `SteamOfflineTool.zip`, checks its SHA-256 against the one GitHub reports, waits for the tool to close and copies the new files over the old ones. Your notes (`hesap_notlari.txt`), pictures and settings stay; if something fails halfway, the old version is put back.
+
 ## Antivirus notes
 
 - The window (`SteamOfflineTool.exe`) never touches Steam's files. All Steam file reading/writing is done by `steam_hesap.py` with the bundled, **PSF-signed** embedded Python. Some antivirus products flag unsigned programs that read Steam login files; this split avoids that.
 - There is **no installer** on purpose: unsigned installers that copy programs and add themselves to startup are often flagged. Just extract and run.
-- Nothing is sent anywhere; the program has no network code.
+- The window itself has no network code. The only internet use is `guncelle.py` checking GitHub for a new version at startup (and downloading it when you click update); nothing about you or your accounts is sent.
 
 ## Settings mark (✔ / ✖)
 
 | Setting | Why |
 |---|---|
-| Steam Cloud off | Avoids cloud sync conflicts when you play offline. **Your saves are then not backed up to the cloud** – untick *Fix Steam settings if wrong* if you want Cloud on. |
+| Steam Cloud off | Avoids cloud sync conflicts when you play offline. **Your saves are then not backed up to the cloud.** |
 | Remote Play off | Not needed for offline play. |
 | Games update only when launched | Steam does not download updates in the background. |
 | Account chooser off | Steam's *Ask which account to use each time Steam starts*. If it is on, Steam shows its account chooser instead of the account you picked, so the tool always turns it off when it opens an account (even with the checkbox unticked). |
@@ -83,7 +87,9 @@ Steam'i **seçtiğin hesapla**, **çevrimdışı ya da çevrimiçi** açar. Stea
 
 > **Not:** Steam'in **“Steam her başlatıldığında hangi hesabın kullanılacağını sor”** ayarı (*Ayarlar → Arayüz*) kapalı olmalı; açıksa Steam seçtiğin hesap yerine hesap seçme ekranını açar. **Program her hesap açışında bunu kendisi kapatır.**
 
-**Özellikler:** hesaplar kart kart, **Steam profil resmiyle** (koyu tema, küçük pencere; resmi olmayan hesapta baş harf); hesap seç → Çevrimdışı Aç / Çevrimiçi Aç; hesaba sağ tık → o hesabı doğrudan açan **masaüstü kısayolu** (simgesi hesabın resmi: gri nokta çevrimdışı, yeşil nokta çevrimiçi); saat yanındaki simgeye sağ tık → hesap listesinden **hızlı açma** (not yazdığın hesap orada notuyla görünür); hesap notları (kartın alt satırına tıkla ya da sağ tık → Not yaz); Steam ayar denetimi (Cloud kapalı, Remote Play kapalı, oyunlar yalnızca başlatılınca güncellenir, hesap seçme ekranı kapalı); Windows Update kapat / varsayılana döndür; **İngilizce / Türkçe** arayüz (pencerenin sağ üstünden seçilir).
+**Özellikler:** hesaplar kart kart, **Steam profil resmiyle** (koyu tema, küçük pencere; resmi olmayan hesapta baş harf); hesap seç → Çevrimdışı Aç / Çevrimiçi Aç; hesaba sağ tık → o hesabı doğrudan açan **masaüstü kısayolu** (simgesi hesabın resmi: gri nokta çevrimdışı, yeşil nokta çevrimiçi); saat yanındaki simgeye sağ tık → hesap listesinden **hızlı açma** (not yazdığın hesap orada notuyla görünür); hesap notları (kartın alt satırına tıkla ya da sağ tık → Not yaz); Steam ayarları (Cloud kapalı, Remote Play kapalı, oyunlar yalnızca başlatılınca güncellenir, hesap seçme ekranı kapalı) Steam kapalıyken her zaman düzeltilir; üstte Steam ışığı (yeşil açık, gri kapalı); sağ altta Windows Update ışığı (yeşil kapalı, turuncu kısmen kapalı, gri açık; basınca kapatır, ↻ varsayılana döndürür); açık / koyu tema düğmesi; **İngilizce / Türkçe** arayüz (pencerenin sağ üstünden seçilir); açıklamalar başlığın yanındaki ⓘ'de; pencere boyutu hatırlanır.
+
+**Güncelleme:** program açılınca GitHub'da yeni sürüm var mı bir kez bakar. Varsa sağ üstteki sürüm yazısı sarı olur; tıklayınca yeni sürümü indirir, kapanır, kendi klasörüne kurar ve yeniden açılır. Notların ve ayarların korunur.
 
 **İndirme linki (her zaman son sürüm):**
 
@@ -101,7 +107,7 @@ irm https://raw.githubusercontent.com/lones8888/SteamOfflineTool/main/install.ps
 
 Son sürümü masaüstündeki `SteamOfflineTool` klasörüne çıkarır ve açar (notların korunur); güncellemek için aynı satırı tekrar çalıştır.
 
-**Not:** "Steam ayarları yanlışsa düzelt" açıkken Steam Cloud kapatılır, oyun kayıtların buluta yedeklenmez. Çevrimdışı açılış için hesapla bu bilgisayarda bir kez "Beni hatırla" işaretli giriş yapılmış olmalı.
+**Not:** Steam Cloud her zaman kapatılır, oyun kayıtların buluta yedeklenmez. Çevrimdışı açılış için hesapla bu bilgisayarda bir kez "Beni hatırla" işaretli giriş yapılmış olmalı.
 
 ## License
 

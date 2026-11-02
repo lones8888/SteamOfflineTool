@@ -30,6 +30,8 @@
 //   (config\avatarcache\<SteamID64>.png) exe'nin yanindaki avatarlar klasorune kopyalar (exe Steam klasorune yine
 //   dokunmaz); resmi olmayan hesapta bas harf. Hesap kisayollarinin simgesi o hesabin resmi (sag altta son mod
 //   noktasi: cevrimdisi gri, cevrimici yesil). Not, kartin alt satirina tiklayinca (ya da sag tik > Not yaz) yazilir.
+//   Program acilinca GitHub'da yeni surum var mi bir kez bakilir (guncelle.py); varsa ustteki surum yazisi sari olur,
+//   tiklayinca yeni surum indirilir, program kapanir, kendi klasorune kurulur ve yeniden acilir.
 // Derleme: derle.bat (Windows'taki .NET Framework 4 derleyicisi, indirme gerekmez). Dil C# 5 ile sinirli.
 using System;
 using System.Collections.Generic;
@@ -93,6 +95,8 @@ namespace SteamOfflineTool
                     goster.Set();
                     return 0;
                 }
+                // guncelle.py yeni surumu kurunca --guncellendi, kuramazsa (eski surum yerinde) --guncelleme-hatasi ile acar
+                AnaPencere.AcilisDurumu = args.Contains("--guncellendi") ? 1 : args.Contains("--guncelleme-hatasi") ? -1 : 0;
                 var pencere = new AnaPencere(false);
                 var dinleyici = new Thread(() =>
                 {
@@ -237,7 +241,7 @@ namespace SteamOfflineTool
                         kapandi = Steam.ZorlaKapat();
                     if (!kapandi) throw new Exception(Dil.T("Steam did not close. Nothing was changed.", "Steam kapanmadı. Hiçbir şey değişmedi."));
                 }
-                Motor.Ac(steam, h.HamAd, deger, UygulamaAyari.Oku("AyarlariDuzelt", true));
+                Motor.Ac(steam, h.HamAd, deger, true);      // 1.4: ayarlar her zaman duzeltilir
                 Steam.Baslat(steam);
                 return 0;
             }
@@ -417,20 +421,26 @@ namespace SteamOfflineTool
             adaylar.Add(new KeyValuePair<Version, string>(v, exe));
         }
 
-        static string Tirnak(string s) { return "\"" + s.Replace("\"", "\\\"") + "\""; }
+        internal static string Tirnak(string s) { return "\"" + s.Replace("\"", "\\\"") + "\""; }
 
         // "hata" anahtari varsa istisna atar
         static Dictionary<string, object> Calistir(string steam, params string[] argumanlar)
         {
+            return BetikCalistir(Betik, new[] { steam }.Concat(argumanlar).ToArray());
+        }
+
+        // betigi (exe'nin yanindaki .py) gorunmez calistirir; cikti tek satir JSON. 1.4: guncelle.py de bununla calisir
+        internal static Dictionary<string, object> BetikCalistir(string betik, params string[] argumanlar)
+        {
             string py = PythonBul();
             if (py == null) throw new Exception(Dil.T("Python 3 was not found. Reinstall the tool or install Python 3 from python.org.",
                                                       "Python 3 bulunamadı. Programı yeniden kur ya da python.org'dan Python 3 kur."));
-            if (!File.Exists(Betik)) throw new Exception(Dil.T("steam_hesap.py not found (it must be next to the exe): ",
-                                                               "steam_hesap.py bulunamadı (exe'nin yanında olmalı): ") + Betik);
-            var bilgi = new ProcessStartInfo(py, "-I " + Tirnak(Betik) + " " + Tirnak(steam) + " " + string.Join(" ", argumanlar.Select(Tirnak)))
+            if (!File.Exists(betik)) throw new Exception(Path.GetFileName(betik) + Dil.T(" not found (it must be next to the exe): ",
+                                                                                         " bulunamadı (exe'nin yanında olmalı): ") + betik);
+            var bilgi = new ProcessStartInfo(py, "-I " + Tirnak(betik) + " " + string.Join(" ", argumanlar.Select(Tirnak)))
             {
                 UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
-                WorkingDirectory = Path.GetDirectoryName(Betik)
+                WorkingDirectory = Path.GetDirectoryName(betik)
             };
             string cikti, hata;
             using (Process p = Process.Start(bilgi))
@@ -444,7 +454,7 @@ namespace SteamOfflineTool
             Dictionary<string, object> sonuc = null;
             try { sonuc = new JavaScriptSerializer { MaxJsonLength = int.MaxValue }.Deserialize<Dictionary<string, object>>(satir); }
             catch (Exception) { }
-            if (sonuc == null) throw new Exception(Dil.T("steam_hesap.py did not respond. ", "steam_hesap.py yanıt vermedi. ")
+            if (sonuc == null) throw new Exception(Path.GetFileName(betik) + Dil.T(" did not respond. ", " yanıt vermedi. ")
                                                    + (hata.Trim().Length > 0 ? hata.Trim() : cikti.Trim()));
             object h;
             if (sonuc.TryGetValue("hata", out h) && h != null) throw new Exception(Metin(h));
@@ -507,13 +517,13 @@ namespace SteamOfflineTool
             return parca.Count > 0 ? string.Join(" ", parca) : null;
         }
 
-        static object Al(Dictionary<string, object> d, string ad)
+        internal static object Al(Dictionary<string, object> d, string ad)
         {
             object o;
             return d != null && d.TryGetValue(ad, out o) ? o : null;
         }
 
-        static string Metin(object o) { return o == null ? null : Convert.ToString(o, CultureInfo.InvariantCulture); }
+        internal static string Metin(object o) { return o == null ? null : Convert.ToString(o, CultureInfo.InvariantCulture); }
 
         static long Sayi(object o)
         {
@@ -528,6 +538,56 @@ namespace SteamOfflineTool
             if (e != null && !(o is string))
                 foreach (object x in e) l.Add(x);
             return l;
+        }
+    }
+
+    // ------------------------------------------------------------------ guncelleme (1.4)
+
+    // Program acilinca GitHub'da yeni surum var mi bir kez bakilir; varsa ustteki surum yazisi sari olur. Tiklayinca yeni
+    // surum indirilir, program kapanir, yeni surum programin bulundugu klasore kurulur (notlar ve resimler kalir) ve program
+    // yeniden acilir. Exe internete cikmaz: denetim, indirme ve dosya degistirme guncelle.py'de (Python), Steam dosyalarindaki gibi.
+    public static class Guncelleyici
+    {
+        public static string Betik
+        {
+            get { return Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "guncelle.py"); }
+        }
+
+        public static Version Surum
+        {
+            get
+            {
+                Version v = Assembly.GetExecutingAssembly().GetName().Version;
+                return new Version(v.Major, v.Minor, Math.Max(0, v.Build));
+            }
+        }
+
+        public static string Yazi(Version v) { return "v" + v.Major + "." + v.Minor + "." + Math.Max(0, v.Build); }
+
+        // GitHub'daki son surum; bulunamazsa null
+        public static Version SonSurum()
+        {
+            Version v;
+            string s = Motor.Metin(Motor.Al(Motor.BetikCalistir(Betik, "--kontrol"), "surum"));
+            return s != null && Version.TryParse(s, out v) ? new Version(v.Major, v.Minor, Math.Max(0, v.Build)) : null;
+        }
+
+        // son surumu indirir (SHA-256 GitHub'dakiyle karsilastirilir), gecici klasore cikarir; doner: yeni SteamOfflineTool klasoru
+        public static string Indir()
+        {
+            string kaynak = Motor.Metin(Motor.Al(Motor.BetikCalistir(Betik, "--indir"), "kaynak"));
+            if (string.IsNullOrEmpty(kaynak) || !Directory.Exists(kaynak))
+                throw new Exception(Dil.T("the downloaded version could not be opened", "indirilen sürüm açılamadı"));
+            return kaynak;
+        }
+
+        // yeni surumun kendi Python'uyla guncelle.py --uygula: bu program kapaninca dosyalari hedefe kopyalar ve programi acar
+        public static void Uygula(string kaynak, string hedef, bool baslat)
+        {
+            string arg = "-I " + Motor.Tirnak(Path.Combine(kaynak, "guncelle.py")) + " --uygula --pid " + Process.GetCurrentProcess().Id
+                       + " --hedef " + Motor.Tirnak(hedef) + " --kaynak " + Motor.Tirnak(kaynak) + (baslat ? "" : " --baslatma");
+            using (Process.Start(new ProcessStartInfo(Path.Combine(kaynak, "python", "python.exe"), arg)
+                                 { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = kaynak })) { }
         }
     }
 
@@ -967,25 +1027,44 @@ namespace SteamOfflineTool
         }
     }
 
-    // ------------------------------------------------------------------ koyu tema (1.4)
+    // ------------------------------------------------------------------ tema (1.4): koyu (varsayilan) ya da acik
 
+    // Renkler her cizimde buradan okunur; Acik degisince (ustteki dugme) pencere yeniden boyanir. Secim kayit defterinde.
     public static class Tema
     {
-        public static readonly Color Arka = Color.FromArgb(24, 25, 28);             // pencere
-        public static readonly Color Kart = Color.FromArgb(34, 36, 41);             // hesap karti, Windows Update karti
-        public static readonly Color KartUstunde = Color.FromArgb(43, 46, 52);
-        public static readonly Color KartSecili = Color.FromArgb(36, 48, 68);
-        public static readonly Color Kenar = Color.FromArgb(55, 59, 66);
-        public static readonly Color Metin = Color.FromArgb(232, 234, 237);
-        public static readonly Color Soluk = Color.FromArgb(150, 157, 167);         // ikincil yazi
-        public static readonly Color Vurgu = Color.FromArgb(56, 132, 255);          // secili kart, ana buton
-        public static readonly Color Buton = Color.FromArgb(46, 49, 56);
-        public static readonly Color ButonUstunde = Color.FromArgb(57, 61, 69);
-        public static readonly Color NotRengi = Color.FromArgb(125, 180, 255);
-        public static readonly Color Yesil = Color.FromArgb(72, 199, 116);
-        public static readonly Color Kirmizi = Color.FromArgb(244, 99, 99);
-        public static readonly Color Turuncu = Color.FromArgb(240, 150, 70);
-        public static readonly Color Cevrimdisi = Color.FromArgb(128, 134, 144);    // son mod noktasi
+        public static bool Acik = UygulamaAyari.Oku("AcikTema", false);
+
+        static Color R(int ar, int ag, int ab, int kr, int kg, int kb) { return Acik ? Color.FromArgb(ar, ag, ab) : Color.FromArgb(kr, kg, kb); }
+
+        public static Color Arka { get { return R(243, 244, 246, 24, 25, 28); } }               // pencere
+        public static Color Kart { get { return R(255, 255, 255, 34, 36, 41); } }               // hesap karti, Windows Update karti
+        public static Color KartUstunde { get { return R(246, 248, 251, 43, 46, 52); } }
+        public static Color KartSecili { get { return R(232, 240, 254, 36, 48, 68); } }
+        public static Color Kenar { get { return R(214, 218, 224, 55, 59, 66); } }
+        public static Color Metin { get { return R(31, 35, 40, 232, 234, 237); } }
+        public static Color Soluk { get { return R(96, 103, 112, 150, 157, 167); } }              // ikincil yazi
+        public static Color Vurgu { get { return R(26, 115, 232, 56, 132, 255); } }               // secili kart, ana buton
+        public static Color VurguUstunde { get { return R(51, 133, 240, 82, 150, 255); } }
+        public static Color VurguBasili { get { return R(20, 95, 200, 38, 104, 214); } }
+        public static Color Buton { get { return R(255, 255, 255, 46, 49, 56); } }
+        public static Color ButonUstunde { get { return R(240, 242, 245, 57, 61, 69); } }
+        public static Color ButonBasili { get { return R(226, 230, 235, 68, 73, 82); } }
+        public static Color ButonPasif { get { return R(240, 241, 243, 36, 38, 43); } }
+        public static Color KenarPasif { get { return R(224, 227, 231, 46, 49, 55); } }
+        public static Color YaziPasif { get { return R(160, 166, 175, 105, 110, 119); } }
+        public static Color OdakKenar { get { return R(26, 115, 232, 150, 190, 255); } }
+        public static Color KutuKenar { get { return R(150, 157, 167, 88, 94, 104); } }          // onay kutusu
+        public static Color NotRengi { get { return R(30, 64, 175, 125, 180, 255); } }
+        public static Color NotYeri { get { return R(160, 166, 175, 98, 105, 116); } }            // "+ not"
+        public static Color Giris { get { return R(255, 255, 255, 18, 19, 22); } }                // not yazma kutusu
+        public static Color Ipucu { get { return R(255, 255, 255, 40, 43, 49); } }
+        public static Color Menu { get { return R(255, 255, 255, 36, 38, 43); } }
+        public static Color MenuSecili { get { return R(232, 240, 254, 52, 57, 66); } }
+        public static Color Yesil { get { return R(27, 122, 52, 72, 199, 116); } }
+        public static Color Kirmizi { get { return R(198, 40, 40, 244, 99, 99); } }
+        public static Color Turuncu { get { return R(200, 95, 0, 240, 150, 70); } }
+        public static Color Cevrimdisi { get { return R(140, 146, 156, 128, 134, 144); } }      // son mod noktasi
+        public static Color Sari { get { return R(202, 138, 4, 250, 204, 21); } }                // yeni surum var
 
         static float oran;
 
@@ -1001,22 +1080,30 @@ namespace SteamOfflineTool
 
         [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr pencere, int ozellik, ref int deger, int boyut);
         [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)] static extern int SetWindowTheme(IntPtr pencere, string uygulama, string liste);
+        [DllImport("user32.dll")] static extern bool RedrawWindow(IntPtr pencere, IntPtr alan, IntPtr bolge, uint bayrak);
 
-        // koyu baslik cubugu: Windows 11 / 10 20H1+ (20), eski Windows 10 (19); desteklenmezse hicbir sey olmaz
+        // baslik cubugu temaya gore: Windows 11 / 10 20H1+ (20), eski Windows 10 (19); desteklenmezse hicbir sey olmaz
         public static void KoyuBaslik(IntPtr pencere)
         {
-            int bir = 1;
+            int deger = Acik ? 0 : 1;
             try
             {
-                if (DwmSetWindowAttribute(pencere, 20, ref bir, 4) != 0) DwmSetWindowAttribute(pencere, 19, ref bir, 4);
+                if (DwmSetWindowAttribute(pencere, 20, ref deger, 4) != 0) DwmSetWindowAttribute(pencere, 19, ref deger, 4);
             }
             catch (Exception) { }
         }
 
-        // koyu kaydirma cubugu (Windows 10 1809+)
+        // kaydirma cubugu temaya gore (koyu: Windows 10 1809+)
         public static void KoyuKaydirma(IntPtr pencere)
         {
-            try { SetWindowTheme(pencere, "DarkMode_Explorer", null); } catch (Exception) { }
+            try { SetWindowTheme(pencere, Acik ? "Explorer" : "DarkMode_Explorer", null); } catch (Exception) { }
+        }
+
+        // tema degisince pencereyi cercevesi ve icindekilerle yeniden boyar
+        public static void Yenile(IntPtr pencere)
+        {
+            try { RedrawWindow(pencere, IntPtr.Zero, IntPtr.Zero, 0x0001 | 0x0004 | 0x0080 | 0x0400 | 0x0100); }   // INVALIDATE|ERASE|ALLCHILDREN|FRAME|UPDATENOW
+            catch (Exception) { }
         }
 
         public static GraphicsPath Yuvarlak(RectangleF r, float yaricap)
@@ -1076,16 +1163,16 @@ namespace SteamOfflineTool
             Graphics g = e.Graphics;
             g.Clear(Parent != null ? Parent.BackColor : Tema.Arka);
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            Color zemin = !Enabled ? Color.FromArgb(36, 38, 43)
-                        : ana ? (basili ? Color.FromArgb(38, 104, 214) : ustunde ? Color.FromArgb(82, 150, 255) : Tema.Vurgu)
-                        : (basili ? Color.FromArgb(68, 73, 82) : ustunde ? Tema.ButonUstunde : Tema.Buton);
-            Color kenar = !Enabled ? Color.FromArgb(46, 49, 55) : Focused && ShowFocusCues ? Color.FromArgb(150, 190, 255) : ana ? zemin : Tema.Kenar;
+            Color zemin = !Enabled ? Tema.ButonPasif
+                        : ana ? (basili ? Tema.VurguBasili : ustunde ? Tema.VurguUstunde : Tema.Vurgu)
+                        : (basili ? Tema.ButonBasili : ustunde ? Tema.ButonUstunde : Tema.Buton);
+            Color kenar = !Enabled ? Tema.KenarPasif : Focused && ShowFocusCues ? Tema.OdakKenar : ana ? zemin : Tema.Kenar;
             using (GraphicsPath yol = Tema.Yuvarlak(new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), 4f * Tema.Oran))
             {
                 using (var f = new SolidBrush(zemin)) g.FillPath(f, yol);
                 using (var k = new Pen(kenar)) g.DrawPath(k, yol);
             }
-            Color yazi = !Enabled ? Color.FromArgb(105, 110, 119) : ana ? Color.White : ForeColor;
+            Color yazi = !Enabled ? Tema.YaziPasif : ana ? Color.White : Tema.Metin;
             TextRenderer.DrawText(g, Text, Font, ClientRectangle, yazi, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter
                                   | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
         }
@@ -1122,15 +1209,97 @@ namespace SteamOfflineTool
             using (GraphicsPath yol = Tema.Yuvarlak(kutu, 3f * Tema.Oran))
             {
                 using (var f = new SolidBrush(Checked ? Tema.Vurgu : Tema.Buton)) g.FillPath(f, yol);
-                using (var p = new Pen(Checked ? Tema.Vurgu : Focused && ShowFocusCues ? Color.FromArgb(150, 190, 255) : Color.FromArgb(88, 94, 104)))
+                using (var p = new Pen(Checked ? Tema.Vurgu : Focused && ShowFocusCues ? Tema.OdakKenar : Tema.KutuKenar))
                     g.DrawPath(p, yol);
             }
             if (Checked)
                 using (var p = new Pen(Color.White, Math.Max(1.6f, 1.8f * Tema.Oran)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
                     g.DrawLines(p, new[] { new PointF(k * 0.25f, y + k * 0.52f), new PointF(k * 0.43f, y + k * 0.71f), new PointF(k * 0.76f, y + k * 0.31f) });
             var yazi = new Rectangle(k + Bosluk, 0, Width - k - Bosluk, Height);
-            TextRenderer.DrawText(g, Text, Font, yazi, Enabled ? ForeColor : Tema.Soluk, TextFormatFlags.VerticalCenter | TextFormatFlags.Left
+            TextRenderer.DrawText(g, Text, Font, yazi, Enabled ? Tema.Metin : Tema.Soluk, TextFormatFlags.VerticalCenter | TextFormatFlags.Left
                                   | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+        }
+    }
+
+    // durum isigi: acikken yesil yanar, kapaliyken gri (Steam: yaninda girisli hesap; Windows Update: durum, tiklaninca kapatir)
+    public class DurumIsigi : Control
+    {
+        bool acik, ustunde;
+        string yazi = "";
+        Color? renk;                    // yaniyorken isik ve yazi rengi (yoksa yesil)
+        bool kutulu;
+
+        // dugme gibi kutu icinde (Windows Update: tiklaninca kapatir)
+        public bool Kutulu
+        {
+            get { return kutulu; }
+            set { kutulu = value; Size = GetPreferredSize(Size.Empty); Invalidate(); }
+        }
+
+        int Ic { get { return kutulu ? O(10) : 0; } }
+
+        protected override void OnMouseEnter(EventArgs e) { ustunde = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { ustunde = false; Invalidate(); base.OnMouseLeave(e); }
+
+        public DurumIsigi()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            Size = GetPreferredSize(Size.Empty);
+        }
+
+        static int O(float px) { return (int)Math.Round(px * Tema.Oran); }
+
+        public void Ayarla(bool acik, string yazi, Color? renk = null)
+        {
+            yazi = yazi ?? "";
+            if (acik == this.acik && yazi == this.yazi && renk == this.renk) return;
+            this.acik = acik;
+            this.yazi = yazi;
+            this.renk = renk;
+            Size = GetPreferredSize(Size.Empty);
+            Invalidate();
+        }
+
+        protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Invalidate(); }
+
+        // once yazi, sonra isik
+        public override Size GetPreferredSize(Size istenen)
+        {
+            int d = O(18), en, boy;
+            if (yazi.Length == 0) { en = d + O(4); boy = d + O(4); }
+            else
+            {
+                Size t = TextRenderer.MeasureText(yazi, Font);
+                en = t.Width + O(4) + d + O(2);
+                boy = Math.Max(d + O(4), t.Height);
+            }
+            return kutulu ? new Size(en + 2 * Ic, Math.Max(boy, O(28))) : new Size(en, boy);
+        }
+
+        protected override void OnFontChanged(EventArgs e) { base.OnFontChanged(e); Size = GetPreferredSize(Size.Empty); }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.Clear(Parent != null ? Parent.BackColor : Tema.Arka);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            if (kutulu)                                     // dugme gibi: kutu, ustune gelince acik renk
+                using (GraphicsPath kutu = Tema.Yuvarlak(new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), 4f * Tema.Oran))
+                {
+                    using (var f = new SolidBrush(ustunde && Enabled && Cursor == Cursors.Hand ? Tema.ButonUstunde : Tema.Buton)) g.FillPath(f, kutu);
+                    using (var k = new Pen(Tema.Kenar)) g.DrawPath(k, kutu);
+                }
+            int yaziEni = yazi.Length > 0 ? TextRenderer.MeasureText(yazi, Font).Width : 0;
+            float d = O(18), x = Ic + (yazi.Length > 0 ? yaziEni + O(4) : O(2)), y = (Height - d) / 2f, ic = O(12);
+            Color renk = acik ? (this.renk ?? Tema.Yesil) : Tema.Cevrimdisi;
+            if (acik)                                       // yaniyor: etrafinda hafif hale
+                using (var hale = new SolidBrush(Color.FromArgb(70, renk))) g.FillEllipse(hale, x, y, d, d);
+            using (var f = new SolidBrush(renk)) g.FillEllipse(f, x + (d - ic) / 2f, y + (d - ic) / 2f, ic, ic);
+            using (var parlak = new SolidBrush(Color.FromArgb(acik ? 120 : 60, Color.White)))   // ustte kucuk parlama
+                g.FillEllipse(parlak, x + (d - ic) / 2f + ic * 0.22f, y + (d - ic) / 2f + ic * 0.16f, ic * 0.38f, ic * 0.3f);
+            if (yazi.Length > 0)
+                TextRenderer.DrawText(g, yazi, Font, new Rectangle(Ic, 0, yaziEni + O(2), Height),
+                                      acik ? renk : Tema.Soluk, TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
         }
     }
 
@@ -1154,7 +1323,7 @@ namespace SteamOfflineTool
             };
             Draw += (s, e) =>
             {
-                e.Graphics.Clear(Color.FromArgb(40, 43, 49));
+                e.Graphics.Clear(Tema.Ipucu);
                 using (var p = new Pen(Tema.Kenar)) e.Graphics.DrawRectangle(p, 0, 0, e.Bounds.Width - 1, e.Bounds.Height - 1);
                 TextRenderer.DrawText(e.Graphics, e.ToolTipText, yazi, Rectangle.Inflate(e.Bounds, -Olcu(8), -Olcu(5)), Tema.Metin,
                                       TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.Left | TextFormatFlags.Top);
@@ -1186,8 +1355,8 @@ namespace SteamOfflineTool
 
     public class KoyuMenuRenkleri : ProfessionalColorTable
     {
-        static readonly Color Zemin = Color.FromArgb(36, 38, 43);
-        static readonly Color Secili = Color.FromArgb(52, 57, 66);
+        static Color Zemin { get { return Tema.Menu; } }
+        static Color Secili { get { return Tema.MenuSecili; } }
         public override Color ToolStripDropDownBackground { get { return Zemin; } }
         public override Color ImageMarginGradientBegin { get { return Zemin; } }
         public override Color ImageMarginGradientMiddle { get { return Zemin; } }
@@ -1210,13 +1379,13 @@ namespace SteamOfflineTool
 
         protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
         {
-            e.TextColor = e.Item.Enabled ? Tema.Metin : Color.FromArgb(105, 110, 119);
+            e.TextColor = e.Item.Enabled ? Tema.Metin : Tema.YaziPasif;
             base.OnRenderItemText(e);
         }
 
         protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
         {
-            e.ArrowColor = e.Item != null && !e.Item.Enabled ? Color.FromArgb(105, 110, 119) : Tema.Metin;
+            e.ArrowColor = e.Item != null && !e.Item.Enabled ? Tema.YaziPasif : Tema.Metin;
             base.OnRenderArrow(e);
         }
     }
@@ -1462,7 +1631,7 @@ namespace SteamOfflineTool
             AutoScroll = true;
             TabStop = true;
             notKutusu = new TextBox { Visible = false, BorderStyle = BorderStyle.FixedSingle, MaxLength = 300,
-                                      BackColor = Color.FromArgb(18, 19, 22), ForeColor = Tema.NotRengi, Font = kucuk };
+                                      BackColor = Tema.Giris, ForeColor = Tema.NotRengi, Font = kucuk };
             notKutusu.KeyDown += NotTusu;
             notKutusu.Leave += delegate { NotuBitir(); };
             Controls.Add(notKutusu);
@@ -1652,7 +1821,17 @@ namespace SteamOfflineTool
             TextRenderer.DrawText(g, o.Isim, kalin, SatirAlani(r, 0), Tema.Metin, orta);
             if (o.Alt.Length > 0) TextRenderer.DrawText(g, o.Alt, kucuk, SatirAlani(r, 1), Tema.Soluk, orta);
             if (o.Not.Length > 0) TextRenderer.DrawText(g, o.Not, kucuk, SatirAlani(r, 2), Tema.NotRengi, orta);
-            else if (sec || ust) TextRenderer.DrawText(g, NotYeri, kucuk, SatirAlani(r, 2), Color.FromArgb(98, 105, 116), orta);
+            else if (sec || ust) TextRenderer.DrawText(g, NotYeri, kucuk, SatirAlani(r, 2), Tema.NotYeri, orta);
+        }
+
+        // tema degisti: arka plan, not kutusu, kaydirma cubugu
+        public void TemaYenile()
+        {
+            BackColor = Tema.Arka;
+            notKutusu.BackColor = Tema.Giris;
+            notKutusu.ForeColor = Tema.NotRengi;
+            if (IsHandleCreated) Tema.KoyuKaydirma(Handle);
+            Invalidate();
         }
 
         // ---------------------------------------------------------- fare, klavye, ipucu
@@ -1812,11 +1991,11 @@ namespace SteamOfflineTool
 
     public class AnaPencere : Form
     {
-        static readonly Color Yesil = Tema.Yesil;          // 1.4: koyu tema renkleri
-        static readonly Color Kirmizi = Tema.Kirmizi;
-        static readonly Color Turuncu = Tema.Turuncu;
-        static readonly Color Gri = Tema.Soluk;
-        static readonly Color KartRengi = Tema.Kart;
+        static Color Yesil { get { return Tema.Yesil; } }          // 1.4: renkler temadan (acik / koyu)
+        static Color Kirmizi { get { return Tema.Kirmizi; } }
+        static Color Turuncu { get { return Tema.Turuncu; } }
+        static Color Gri { get { return Tema.Soluk; } }
+        static Color KartRengi { get { return Tema.Kart; } }
         static string[] KuralAdlari()
         {
             return new[] { Dil.T("Steam Cloud off", "Steam Cloud kapalı"), Dil.T("Remote Play off", "Remote Play kapalı"),
@@ -1872,16 +2051,26 @@ namespace SteamOfflineTool
         bool mesgul, steamAcikti, bekleyenYenileme, wuCalisiyor;
 
         HesapKartlari kartlar;
-        KoyuButon btnCevrimdisi, btnCevrimici, btnKapat, btnWuKapat, btnWuAc;
-        Label lblSteam, lblMesaj, lblWu, lblWuBaslik;
-        KoyuOnay chkBaslangic, chkDuzelt;
-        Label lblBaslik, lblAciklama, lblDil, lblNot;
+        KoyuButon btnCevrimdisi, btnCevrimici, btnKapat, btnWuVarsayilan;
+        Label lblMesaj;
+        DurumIsigi wuIsigi;             // 1.4: Windows Update kapali / kismen kapaliysa yesil; tiklayinca kapatir
+        int wuDurum;                    // Guncelleme.Durum: 1 kapali, 0 acik (varsayilan), -1 kismen
+        DurumIsigi steamIsigi;
+        KoyuOnay chkBaslangic;
+        const bool Duzelt = true;       // 1.4: Steam ayarlari her zaman duzeltilir (eskiden alttaki kutu: "yanlissa duzelt")
+        Label lblBaslik, lblDil, lblBilgi;
         KoyuButon btnIngilizce, btnTurkce;
         KoyuButon btnKisayol;
         ContextMenuStrip satirMenu, tepsiMenu;
         ToolStripMenuItem mnuKisayolCevrimdisi, mnuKisayolCevrimici, mnuNot;
-        Font kalin, kucuk;
+        Font kalin, kucuk, kucukKalin;
         KoyuIpucu ipucu;
+        Label lblSurum;
+        KoyuButon btnTema;
+        int mesajTuru;                  // 0 gri, 1 yesil, 2 kirmizi, 3 turuncu: tema degisince mesajin rengi yeniden secilir
+        Version yeniSurum;              // GitHub'da daha yeni surum (acilista bir kez bakilir), yoksa null
+        bool guncelleniyor;
+        public static int AcilisDurumu; // 1: guncellendi, -1: guncelleme kurulamadi (Program.Main argumandan)
         System.Windows.Forms.Timer zamanlayici;
         NotifyIcon tepsi;
 
@@ -1895,12 +2084,14 @@ namespace SteamOfflineTool
             Font = new Font("Segoe UI", 9f);
             kalin = new Font(Font, FontStyle.Bold);
             kucuk = new Font("Segoe UI", 8.25f);
+            kucukKalin = new Font(kucuk, FontStyle.Bold);
             AutoScaleMode = AutoScaleMode.None;
             BackColor = Tema.Arka;
             ForeColor = Tema.Metin;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(P(780), P(600));
-            MinimumSize = new Size(P(640), P(500));
+            ClientSize = new Size(P(780), P(560));
+            MinimumSize = new Size(P(620), P(440));
+            if (!onizleme) BoyutuYukle();      // 1.4: kenardan suruklenen boyut ve yer hatirlanir
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch (Exception) { }
             Olustur();
             HesaplariYukle();
@@ -1934,22 +2125,28 @@ namespace SteamOfflineTool
             var sol = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = new Padding(0) };
             lblBaslik = new Label { AutoSize = true, Font = new Font(Font.FontFamily, 12f, FontStyle.Bold), Margin = new Padding(0, 0, P(10), 0) };
             sol.Controls.Add(lblBaslik);
-            lblSteam = new Label { AutoSize = true, Font = kalin, Margin = new Padding(0, P(4), 0, 0) };
-            sol.Controls.Add(lblSteam);
+            steamIsigi = new DurumIsigi { Font = kalin, Margin = new Padding(0, P(3), 0, 0) };
+            sol.Controls.Add(steamIsigi);
+            lblBilgi = new Label { Text = "ⓘ", AutoSize = true, Font = new Font("Segoe UI Symbol", 11f), Cursor = Cursors.Help, ForeColor = Gri,
+                                   Margin = new Padding(P(6), P(2), 0, 0) };       // 1.4: aciklamalar ustune gelince
+            sol.Controls.Add(lblBilgi);
             var dil = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Right, Margin = new Padding(0) };
+            lblSurum = new Label { AutoSize = true, Font = kucuk, Margin = new Padding(0, P(6), P(12), 0) };    // yeni surum varsa sari
+            lblSurum.Click += delegate { SurumTiklandi(); };
+            btnTema = new KoyuButon                             // acik / koyu tema (simge: gecilecek tema)
+            {
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(P(34), P(28)),
+                Padding = new Padding(P(2), 0, P(2), 0), Margin = new Padding(0, 0, P(12), 0), Font = new Font("Segoe UI Symbol", 10.5f)
+            };
+            btnTema.Click += delegate { TemaDegistir(); };
             lblDil = new Label { AutoSize = true, Margin = new Padding(0, P(5), P(6), 0) };
             btnIngilizce = DilButonu("English", false);         // 1.4: acilir liste yerine iki dugme (koyu temada duzgun gorunur)
             btnTurkce = DilButonu("Türkçe", true);
-            dil.Controls.AddRange(new Control[] { lblDil, btnIngilizce, btnTurkce });
+            dil.Controls.AddRange(new Control[] { lblSurum, btnTema, lblDil, btnIngilizce, btnTurkce });
             ust.Controls.Add(sol, 0, 0);
             ust.Controls.Add(dil, 1, 0);
+            ust.Margin = new Padding(0, 0, 0, P(8));
             Ekle(kok, ust, false);
-
-            lblNot = Yazi();                // en ustte: Steam'in "acilista hesap sor" tiki kapali olmali
-            lblNot.Font = kucuk;
-            lblNot.ForeColor = Gri;
-            lblNot.Margin = new Padding(0, 0, 0, P(6));
-            Ekle(kok, lblNot, false);
 
             kartlar = KartlarOlustur();
             Ekle(kok, kartlar, true);
@@ -1968,74 +2165,73 @@ namespace SteamOfflineTool
             lblMesaj.Margin = new Padding(0, P(6), 0, 0);
             Ekle(kok, lblMesaj, false);
 
-            lblAciklama = Yazi();
-            lblAciklama.Font = kucuk;
-            lblAciklama.Margin = new Padding(0, P(3), 0, 0);
-            lblAciklama.ForeColor = Gri;
-            Ekle(kok, lblAciklama, false);
-
-            lblWu = new Label { AutoSize = true, Font = kalin };
-            btnWuKapat = Buton("", false);
-            btnWuAc = Buton("", false);
-            btnWuKapat.Click += delegate { YoneticiIslemi("--wu-kapat", WuKapatSorusu); };
-            btnWuAc.Click += delegate { YoneticiIslemi("--wu-ac", WuAcSorusu); };
-            TableLayoutPanel wu = Kart("Windows Update", lblWu, btnWuKapat, btnWuAc);
-            wu.Margin = new Padding(0, P(8), 0, 0);
-            Ekle(kok, wu, false);
-
-            var alt = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, P(8), 0, 0) };
+            // alt satir: solda baslangic ve kisayol, sagda Windows Update (1.4: ayri kart yerine)
+            var alt = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(0, P(6), 0, 0) };
+            alt.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            alt.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            alt.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            var altSol = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = new Padding(0) };
             chkBaslangic = new KoyuOnay { AutoSize = true, Checked = Baslangic.Acik(), Margin = new Padding(0, P(4), P(16), 0) };
-            chkDuzelt = new KoyuOnay { AutoSize = true, Checked = UygulamaAyari.Oku("AyarlariDuzelt", true), Margin = new Padding(0, P(4), P(16), 0) };
             btnKisayol = Buton("", false);
             btnKisayol.MinimumSize = new Size(0, P(28));
-            btnKisayol.Margin = new Padding(0, 0, P(16), 0);
+            btnKisayol.Margin = new Padding(0);
             chkBaslangic.CheckedChanged += delegate { BaslangicDegisti(); };
-            chkDuzelt.CheckedChanged += delegate { DuzeltDegisti(); };
             btnKisayol.Click += delegate { UygulamaKisayolu(); };
-            alt.Controls.AddRange(new Control[] { chkBaslangic, chkDuzelt, btnKisayol });
+            altSol.Controls.AddRange(new Control[] { chkBaslangic, btnKisayol });
+            // Windows Update isigi: kapali yesil, kismen kapali turuncu, acik gri. Gri ya da turuncuyken basinca guncellemeleri
+            // kapatir (yesil olur); ↻ varsayilana dondurur (gri olur).
+            var altSag = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Right, Margin = new Padding(0) };
+            var lblWu = new Label { Text = "Windows Update", AutoSize = true, Font = kalin, Margin = new Padding(0, P(6), P(8), 0) };   // sabit yazi
+            wuIsigi = new DurumIsigi { Font = kalin, Cursor = Cursors.Hand, Kutulu = true, Margin = new Padding(0, 0, P(6), 0) };
+            wuIsigi.Click += delegate { if (wuDurum != 1) YoneticiIslemi("--wu-kapat", WuKapatSorusu); };
+            btnWuVarsayilan = new KoyuButon
+            {
+                Text = "↻", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(P(34), P(28)),
+                Padding = new Padding(P(2), 0, P(2), 0), Margin = new Padding(0), Font = new Font("Segoe UI Symbol", 11f)
+            };
+            btnWuVarsayilan.Click += delegate { YoneticiIslemi("--wu-ac", WuAcSorusu); };
+            altSag.Controls.AddRange(new Control[] { lblWu, wuIsigi, btnWuVarsayilan });
+            alt.Controls.Add(altSol, 0, 0);
+            alt.Controls.Add(altSag, 1, 0);
             Ekle(kok, alt, false);
 
             Controls.Add(kok);
             MetinleriUygula();
-            Mesaj(VarsayilanMesaj, Gri);
+            Mesaj("", Gri);
             ResumeLayout(true);
-        }
-
-        string VarsayilanMesaj
-        {
-            get
-            {
-                return Dil.T("Use this window to switch accounts: Steam's own \"Switch Account\" screen always signs in online.",
-                             "Hesap değiştirmek için bu pencereyi kullan: Steam'in \"Hesap Değiştir\" ekranı her zaman çevrimiçi giriş yapar.");
-            }
         }
 
         // butun yazilar secili dilde (dil degisince yeniden cagrilir)
         void MetinleriUygula()
         {
-            lblBaslik.Text = Dil.T("Accounts", "Hesaplar");
-            lblNot.Text = Dil.T("Steam's \u201cAsk which account to use each time Steam starts\u201d must stay off (otherwise Steam shows its account chooser "
-                                + "instead of the account you picked). The tool turns it off every time it opens an account.",
-                                "Steam'in \u201cSteam her başlatıldığında hangi hesabın kullanılacağını sor\u201d ayarı kapalı olmalı (açıksa Steam seçtiğin hesap "
-                                + "yerine hesap seçme ekranını açar). Program her hesap açışında bunu kendisi kapatır.");
+            lblBaslik.Text = "STEAM OFFLINE TOOL";             // 1.4: her dilde ayni
+            btnTema.Text = Tema.Acik ? "☾" : "☀";
+            ipucu.SetToolTip(btnTema, Tema.Acik ? Dil.T("Dark theme", "Koyu tema") : Dil.T("Light theme", "Açık tema"));
             btnCevrimdisi.Text = Dil.T("Open Offline", "Çevrimdışı Aç");
             btnCevrimici.Text = Dil.T("Open Online", "Çevrimiçi Aç");
             btnKapat.Text = Dil.T("Close Steam", "Steam'i Kapat");
-            // 1.4: kisa aciklama; uzun hali ipucunda
-            lblAciklama.Text = Dil.T("✔ settings right · ✖ fixed while Steam is closed · dot on the picture: last mode (gray offline, green online) · "
-                                   + "click a card's bottom line: note · right-click: desktop shortcut",
-                                     "✔ ayarlar doğru · ✖ Steam kapalıyken düzeltilir · resimdeki nokta: son mod (gri çevrimdışı, yeşil çevrimiçi) · "
-                                   + "kartın alt satırına tıkla: not · sağ tık: masaüstü kısayolu");
-            ipucu.SetToolTip(lblAciklama, Dil.T("✔ = Steam Cloud off, Remote Play off, games update only when launched, account chooser off.\n"
-                                              + "An account with ✖ is fixed while Steam is closed (hover over the mark for details).\n"
-                                              + "Right-click an account for a desktop shortcut that opens it directly, with the account's picture.",
-                                                "✔ = Steam Cloud kapalı, Remote Play kapalı, oyunlar yalnızca başlatılınca güncellenir, hesap seçme ekranı kapalı.\n"
-                                              + "✖ olan hesap Steam kapalıyken düzeltilir (ayrıntı için işaretin üzerine gel).\n"
-                                              + "Hesabı doğrudan açan, hesabın resmiyle masaüstü kısayolu için hesaba sağ tıkla."));
-            btnWuKapat.Text = Dil.T("Turn Off Updates", "Güncellemeleri Kapat");
-            btnWuAc.Text = Dil.T("Restore Default", "Varsayılana Döndür");
+            // 1.4: pencerede yazan aciklamalar (ust not, isaretler, kullanim) ⓘ'nin ustune gelince
+            ipucu.SetToolTip(lblBilgi, Dil.T(
+                "Use this window to switch accounts: Steam's own \"Switch Account\" screen always signs in online.\n\n"
+                + "Steam's “Ask which account to use each time Steam starts” must stay off (otherwise Steam shows its account chooser "
+                + "instead of the account you picked). The tool turns it off every time it opens an account.\n\n"
+                + "✔ = Steam Cloud off, Remote Play off, games update only when launched, account chooser off. Wrong settings are "
+                + "always fixed while Steam is closed (✖: hover over the mark for details).\n"
+                + "Dot on the picture: last mode (gray offline, green online).\n"
+                + "Click a card's bottom line to write a note. Right-click an account for a desktop shortcut that opens it directly.\n\n"
+                + "Light at the top: Steam running (green) or closed (gray).\n"
+                + "Windows Update light: off green, partly off orange, on gray. Click it to turn updates off (green); \u21bb restores the default (gray).",
+                "Hesap değiştirmek için bu pencereyi kullan: Steam'in \"Hesap Değiştir\" ekranı her zaman çevrimiçi giriş yapar.\n\n"
+                + "Steam'in “Steam her başlatıldığında hangi hesabın kullanılacağını sor” ayarı kapalı olmalı (açıksa Steam seçtiğin hesap "
+                + "yerine hesap seçme ekranını açar). Program her hesap açışında bunu kendisi kapatır.\n\n"
+                + "✔ = Steam Cloud kapalı, Remote Play kapalı, oyunlar yalnızca başlatılınca güncellenir, hesap seçme ekranı kapalı. Yanlış "
+                + "ayarlar Steam kapalıyken her zaman düzeltilir (✖: ayrıntı için işaretin üzerine gel).\n"
+                + "Resimdeki nokta: son mod (gri çevrimdışı, yeşil çevrimiçi).\n"
+                + "Not için kartın alt satırına tıkla. Hesabı doğrudan açan masaüstü kısayolu için hesaba sağ tıkla.\n\n"
+                + "Üstteki ışık: Steam açık (yeşil) ya da kapalı (gri).\n"
+                + "Windows Update ışığı: kapalı yeşil, kısmen kapalı turuncu, açık gri. Basınca güncellemeleri kapatır (yeşil); \u21bb varsayılana döndürür (gri)."));
+            ipucu.SetToolTip(btnWuVarsayilan, Dil.T("Restore default (Windows Update back on)", "Varsayılana döndür (Windows Update yeniden açılır)"));
             chkBaslangic.Text = Dil.T("Start with Windows", "Windows açılınca başlat");
-            chkDuzelt.Text = Dil.T("Fix Steam settings if wrong", "Steam ayarları yanlışsa düzelt");
             btnKisayol.Text = Dil.T("Desktop shortcut", "Masaüstüne kısayol");
             lblDil.Text = Dil.T("Language:", "Dil:");
             btnIngilizce.Ana = !Dil.Turkce;
@@ -2045,6 +2241,75 @@ namespace SteamOfflineTool
             mnuNot.Text = Dil.T("Write note", "Not yaz");
             kartlar.NotIpucu = Dil.T("Click to write a note", "Not yazmak için tıkla");
             kartlar.NotYeri = Dil.T("+ note", "+ not");
+            SurumGoster();
+        }
+
+        // ---------------------------------------------------------- surum ve guncelleme (1.4)
+
+        // ustteki surum yazisi: guncelse gri, GitHub'da yenisi varsa sari ve tiklaninca gunceller
+        void SurumGoster()
+        {
+            string bu = Guncelleyici.Yazi(Guncelleyici.Surum);
+            if (yeniSurum == null)
+            {
+                lblSurum.Text = bu;
+                lblSurum.ForeColor = Gri;
+                lblSurum.Font = kucuk;
+                lblSurum.Cursor = Cursors.Default;
+                ipucu.SetToolTip(lblSurum, Dil.T("Version ", "Sürüm ") + bu);
+                return;
+            }
+            string yeni = Guncelleyici.Yazi(yeniSurum);
+            lblSurum.Text = bu + " → " + yeni;
+            lblSurum.ForeColor = Tema.Sari;
+            lblSurum.Font = kucukKalin;
+            lblSurum.Cursor = Cursors.Hand;
+            ipucu.SetToolTip(lblSurum, Dil.T("New version " + yeni + " is available. Click to update: the tool closes, installs it into its own folder and opens again. Notes are kept.",
+                                             "Yeni sürüm " + yeni + " var. Güncellemek için tıkla: program kapanır, kendi klasörüne kurar ve yeniden açılır. Notların korunur."));
+        }
+
+        // acilista bir kez: GitHub'da yeni surum var mi (internet yoksa ya da bakilamazsa sessizce gecer)
+        async void GuncellemeDenetle()
+        {
+            Version v = await Task.Run(() =>
+            {
+                try { return Guncelleyici.SonSurum(); }
+                catch (Exception) { return null; }
+            });
+            if (IsDisposed || v == null || v <= Guncelleyici.Surum) return;
+            yeniSurum = v;
+            SurumGoster();
+        }
+
+        async void SurumTiklandi()
+        {
+            if (yeniSurum == null || mesgul || guncelleniyor) return;
+            string yeni = Guncelleyici.Yazi(yeniSurum);
+            string klasor = Path.GetDirectoryName(Application.ExecutablePath);
+            if (MessageBox.Show(Sahip, Dil.T("Update to " + yeni + "?\n\nThe new version is downloaded, the tool closes, it is installed into this folder:\n"
+                                             + klasor + "\nand the tool opens again. Notes are kept.",
+                                             yeni + " sürümüne güncellensin mi?\n\nYeni sürüm indirilir, program kapanır, bu klasöre kurulur:\n"
+                                             + klasor + "\nve program yeniden açılır. Notların korunur."),
+                                "Steam Offline Tool", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                return;
+            guncelleniyor = true;
+            Mesgul(true);
+            Mesaj(Dil.T("Downloading ", "İndiriliyor: ") + yeni + "...", Gri);
+            try
+            {
+                string kaynak = await Task.Run(() => Guncelleyici.Indir());
+                Guncelleyici.Uygula(kaynak, klasor, true);
+                Close();                    // guncelle.py bu program kapaninca dosyalari degistirir ve yeni surumu acar
+            }
+            catch (Exception e)
+            {
+                Mesaj(Dil.T("ERROR: update failed: ", "HATA: güncelleme yapılamadı: ") + e.Message, Kirmizi);
+            }
+            finally
+            {
+                guncelleniyor = false;
+                if (!IsDisposed) Mesgul(false);
+            }
         }
 
         static void Ekle(TableLayoutPanel t, Control c, bool doldur)
@@ -2080,25 +2345,6 @@ namespace SteamOfflineTool
             return b;
         }
 
-        // Windows Update karti (1.4: tek satir; servis ayrintisi ipucunda)
-        TableLayoutPanel Kart(string baslik, Label durum, params Button[] butonlar)
-        {
-            var t = new TableLayoutPanel { ColumnCount = 3, RowCount = 1, AutoSize = true, Dock = DockStyle.Fill, BackColor = KartRengi, Padding = new Padding(P(10), P(6), P(6), P(6)) };
-            t.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            t.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            lblWuBaslik = new Label { Text = baslik, AutoSize = true, Font = kalin, Anchor = AnchorStyles.Left, Margin = new Padding(0, 0, P(10), 0) };
-            durum.Anchor = AnchorStyles.Left;
-            durum.Margin = new Padding(0);
-            var f = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Right, Margin = new Padding(0) };
-            f.Controls.AddRange(butonlar);
-            t.Controls.Add(lblWuBaslik, 0, 0);
-            t.Controls.Add(durum, 1, 0);
-            t.Controls.Add(f, 2, 0);
-            return t;
-        }
-
         HesapKartlari KartlarOlustur()
         {
             var k = new HesapKartlari(olcek, kalin, kucuk, ipucu) { Dock = DockStyle.Fill, Margin = new Padding(0) };
@@ -2120,7 +2366,67 @@ namespace SteamOfflineTool
         void Mesaj(string metin, Color renk)
         {
             lblMesaj.Text = metin;
-            lblMesaj.ForeColor = renk;
+            mesajTuru = renk == Yesil ? 1 : renk == Kirmizi ? 2 : renk == Turuncu ? 3 : 0;
+            lblMesaj.ForeColor = MesajRengi();
+        }
+
+        Color MesajRengi() { return mesajTuru == 1 ? Yesil : mesajTuru == 2 ? Kirmizi : mesajTuru == 3 ? Turuncu : Gri; }
+
+        // ---------------------------------------------------------- tema ve pencere boyutu (1.4)
+
+        void TemaDegistir()
+        {
+            Tema.Acik = !Tema.Acik;
+            try { UygulamaAyari.Yaz("AcikTema", Tema.Acik); } catch (Exception) { }
+            TemaUygula();
+        }
+
+        // renkleri olusturulurken verilen kontroller yeni temaya gecer; digerleri (dugmeler, kartlar, menuler) cizerken temadan okur
+        void TemaUygula()
+        {
+            SuspendLayout();
+            BackColor = Tema.Arka;
+            ForeColor = Tema.Metin;
+            lblBilgi.ForeColor = Gri;
+            lblMesaj.ForeColor = MesajRengi();
+            kartlar.TemaYenile();
+            MetinleriUygula();
+            SteamDurumu(Steam.Acik());
+            WuDurumu();
+            ResumeLayout(true);
+            if (IsHandleCreated)
+            {
+                Tema.KoyuBaslik(Handle);
+                Tema.Yenile(Handle);
+            }
+        }
+
+        // son pencere boyutu ve yeri (kayit defteri "Pencere" = x,y,en,boy); ekranda degilse varsayilan
+        void BoyutuYukle()
+        {
+            try
+            {
+                string s = Kayit.Oku(Registry.CurrentUser, @"Software\SteamOfflineTool", "Pencere") as string;
+                if (s == null) return;
+                int[] d = s.Split(',').Select(x => int.Parse(x, CultureInfo.InvariantCulture)).ToArray();
+                var r = new Rectangle(d[0], d[1], Math.Max(d[2], MinimumSize.Width), Math.Max(d[3], MinimumSize.Height));
+                if (!Screen.AllScreens.Any(e => e.WorkingArea.IntersectsWith(r))) return;
+                StartPosition = FormStartPosition.Manual;
+                Bounds = r;
+            }
+            catch (Exception) { }
+        }
+
+        void BoyutuKaydet()
+        {
+            try
+            {
+                Rectangle r = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+                using (RegistryKey k = Registry.CurrentUser.CreateSubKey(@"Software\SteamOfflineTool"))
+                    k.SetValue("Pencere", string.Join(",", new[] { r.X, r.Y, r.Width, r.Height }.Select(x => x.ToString(CultureInfo.InvariantCulture))),
+                               RegistryValueKind.String);
+            }
+            catch (Exception) { }
         }
 
         void Mesgul(bool m)
@@ -2190,6 +2496,7 @@ namespace SteamOfflineTool
                             + "\n" + Dil.T("Last mode: ", "Son mod: ") + ModAdi(h.Wants)
                             + "\n" + Dil.T("Last sign-in: ", "Son giriş: ") + Tarih(h.Zaman)
                             + (sonKullanilan ? "\n" + Dil.T("Last used account", "Son kullanılan hesap") : "")
+                            + "\n\n" + Dil.T("Right-click: create a desktop shortcut", "Sağ tık: masaüstü kısayolu oluştur")
                 };
                 AyarIsareti(h, o);
                 ogeler.Add(o);
@@ -2233,35 +2540,38 @@ namespace SteamOfflineTool
             return m;
         }
 
+        // 1.4: yazi yerine isik: Steam acikken yesil (yaninda girisli hesap), kapaliyken gri
         void SteamDurumu(bool acik)
         {
             if (!mesgul) btnKapat.Enabled = acik;
-            if (!acik)
+            string ad = "";
+            if (acik)
             {
-                lblSteam.Text = Dil.T("Steam closed", "Steam kapalı");
-                lblSteam.ForeColor = Gri;
-                return;
+                uint no = Steam.AktifHesapNo();
+                Hesap h = no == 0 ? null : hesaplar.FirstOrDefault(x => x.HesapNo == no);
+                ad = h != null ? h.Ad : (Steam.SonHesap() ?? "").Trim();     // cevrimdisi modda ActiveUser 0 kalir: son acilan hesap
             }
-            uint no = Steam.AktifHesapNo();
-            Hesap h = no == 0 ? null : hesaplar.FirstOrDefault(x => x.HesapNo == no);
-            string ad = h != null ? h.Ad : (Steam.SonHesap() ?? "").Trim();     // cevrimdisi modda ActiveUser 0 kalir: son acilan hesap
-            lblSteam.Text = Dil.T("Steam running", "Steam açık") + (ad.Length > 0 ? ": " + ad : "");
-            lblSteam.ForeColor = Yesil;
+            steamIsigi.Ayarla(acik, "Steam");           // hesap adi yazilmaz, ipucunda gorunur
+            steamIsigi.Invalidate();                    // tema degisince de yeniden boyansin
+            ipucu.SetToolTip(steamIsigi, acik ? Dil.T("Steam running", "Steam açık") + (ad.Length > 0 ? ": " + ad : "") : Dil.T("Steam closed", "Steam kapalı"));
         }
 
         void WuDurumu()
         {
             string ayrinti;
             int d = Guncelleme.Durum(out ayrinti);
-            lblWu.Text = d == 1 ? Dil.T("✔ OFF", "✔ KAPALI") : d == 0 ? Dil.T("ON (Windows default)", "AÇIK (Windows varsayılanı)")
-                                                              : Dil.T("PARTLY OFF", "KISMEN KAPALI");
-            lblWu.ForeColor = d == 1 ? Yesil : d == 0 ? Gri : Turuncu;
-            ipucu.SetToolTip(lblWu, ayrinti);       // 1.4: servis ayrintisi ipucunda (pencere daha kucuk)
-            ipucu.SetToolTip(lblWuBaslik, ayrinti);
+            wuDurum = d;
+            wuIsigi.Ayarla(d != 0, d == 1 ? Dil.T("off", "kapalı") : d == 0 ? Dil.T("on", "açık") : Dil.T("partly off", "kısmen kapalı"),
+                           d == -1 ? Turuncu : Yesil);
+            wuIsigi.Invalidate();                   // tema degisince de yeniden boyansin
+            ipucu.SetToolTip(wuIsigi, (d == 1 ? Dil.T("Windows Update is off. ↻ restores the default.", "Windows Update kapalı. ↻ varsayılana döndürür.")
+                                              : Dil.T("Click to turn off updates.", "Güncellemeleri kapatmak için tıkla."))
+                                      + "\n" + ayrinti);       // 1.4: servis ayrintisi ipucunda (pencere daha kucuk)
             if (!wuCalisiyor)
             {
-                btnWuKapat.Enabled = d != 1;        // zaten tamamen kapaliysa "Güncellemeleri Kapat" pasif
-                btnWuAc.Enabled = d != 0;           // zaten varsayilansa "Varsayılana Döndür" pasif
+                wuIsigi.Enabled = true;
+                wuIsigi.Cursor = d != 1 ? Cursors.Hand : Cursors.Default;
+                btnWuVarsayilan.Enabled = d != 0;   // zaten varsayilansa ↻ pasif
             }
         }
 
@@ -2276,19 +2586,26 @@ namespace SteamOfflineTool
             tepsi.MouseClick += (s, e) => { if (e.Button == MouseButtons.Left) PencereyiGoster(); };
         }
 
+        readonly List<Image> tepsiResimleri = new List<Image>();
+
         void TepsiMenusuKur()
         {
             tepsiMenu.Items.Clear();
+            foreach (Image r in tepsiResimleri) r.Dispose();
+            tepsiResimleri.Clear();
             tepsiMenu.Items.Add(Dil.T("Open", "Aç"), null, delegate { PencereyiGoster(); });
             tepsiMenu.Items.Add(new ToolStripSeparator());
             var cevrimdisi = new ToolStripMenuItem(Dil.T("Open offline", "Çevrimdışı aç"));
             var cevrimici = new ToolStripMenuItem(Dil.T("Open online", "Çevrimiçi aç"));
+            cevrimdisi.DropDown.ImageScalingSize = cevrimici.DropDown.ImageScalingSize = new Size(P(24), P(24));   // 1.4: hesaplar resimleriyle
             foreach (Hesap h in hesaplar)
             {
                 Hesap hesap = h;
                 string yazi = HesapYazisi(h);
-                cevrimdisi.DropDownItems.Add(yazi, null, delegate { Ac("1", hesap); });
-                cevrimici.DropDownItems.Add(yazi, null, delegate { Ac("0", hesap); });
+                Bitmap resim = HesapResmi.Kart(h, P(24));
+                tepsiResimleri.Add(resim);
+                cevrimdisi.DropDownItems.Add(new ToolStripMenuItem(yazi, resim, delegate { Ac("1", hesap); }) { ImageScaling = ToolStripItemImageScaling.None });
+                cevrimici.DropDownItems.Add(new ToolStripMenuItem(yazi, resim, delegate { Ac("0", hesap); }) { ImageScaling = ToolStripItemImageScaling.None });
             }
             cevrimdisi.Enabled = cevrimici.Enabled = hesaplar.Count > 0 && !mesgul;
             tepsiMenu.Items.Add(cevrimdisi);
@@ -2341,7 +2658,7 @@ namespace SteamOfflineTool
         protected override void OnActivated(EventArgs e)
         {
             base.OnActivated(e);
-            if (lblWu != null) WuDurumu();
+            if (wuIsigi != null) WuDurumu();
         }
 
         // ---------------------------------------------------------- islemler
@@ -2367,7 +2684,7 @@ namespace SteamOfflineTool
             kartlar.NotuBitir();
             if (secilen != null) kartlar.Sec(h.Ad);
             string mod = deger == "1" ? Dil.T("offline", "çevrimdışı") : Dil.T("online", "çevrimiçi");
-            bool duzelt = chkDuzelt.Checked;
+            bool duzelt = Duzelt;
             Mesgul(true);
             try
             {
@@ -2419,7 +2736,7 @@ namespace SteamOfflineTool
                 }
                 SteamDurumu(false);
                 HesaplariYukle();
-                string m = chkDuzelt.Checked ? AyarlariDuzelt() : null;
+                string m = Duzelt ? AyarlariDuzelt() : null;
                 Bildir(Dil.T("Steam closed.", "Steam kapatıldı.") + (m != null ? " " + m : ""), Yesil);
             }
             finally { if (!IsDisposed) Mesgul(false); }
@@ -2456,7 +2773,7 @@ namespace SteamOfflineTool
             HesaplariYukle();               // mod adlari ve ipuclari yeni dilde
             SteamDurumu(Steam.Acik());
             WuDurumu();
-            Mesaj(VarsayilanMesaj, Gri);
+            Mesaj("", Gri);
         }
 
         async void YoneticiIslemi(string islem, string soru)
@@ -2471,7 +2788,7 @@ namespace SteamOfflineTool
             catch (Exception e) { Mesaj(Dil.T("ERROR: ", "HATA: ") + e.Message, Kirmizi); return; }
             if (p == null) { Mesaj(Dil.T("Cancelled: administrator permission was not given.", "İptal edildi: yönetici izni verilmedi."), Gri); return; }
             wuCalisiyor = true;
-            btnWuKapat.Enabled = btnWuAc.Enabled = false;
+            wuIsigi.Enabled = btnWuVarsayilan.Enabled = false;
             DateTime basla = DateTime.Now;
             using (p)
                 while (!p.HasExited)
@@ -2545,15 +2862,6 @@ namespace SteamOfflineTool
             catch (Exception e) { Mesaj(Dil.T("ERROR: could not write the startup setting: ", "HATA: başlangıç ayarı yazılamadı: ") + e.Message, Kirmizi); }
         }
 
-        void DuzeltDegisti()
-        {
-            UygulamaAyari.Yaz("AyarlariDuzelt", chkDuzelt.Checked);
-            if (!chkDuzelt.Checked) return;
-            if (Steam.Acik()) { Mesaj(Dil.T("Steam is running: settings will be fixed when Steam closes.", "Steam açık: ayarlar Steam kapanınca düzeltilecek."), Gri); return; }
-            string m = AyarlariDuzelt();
-            Mesaj(m ?? Dil.T("Steam settings are already correct.", "Steam ayarları zaten doğru."), Yesil);
-        }
-
         // kartta not yazildi (ya da vazgecildi): degistiyse hesap_notlari.txt'ye yazilir
         void NotKaydet(Hesap h, string yeni)
         {
@@ -2583,7 +2891,7 @@ namespace SteamOfflineTool
                 // Steam kendi kapandi: modlari yeniden oku, yanlis ayarlari duzelt
                 if (kartlar.NotDuzenleniyor) bekleyenYenileme = true;
                 else HesaplariYukle();
-                string m = chkDuzelt.Checked ? AyarlariDuzelt() : null;
+                string m = Duzelt ? AyarlariDuzelt() : null;
                 if (m != null) Mesaj(m, Yesil);
             }
             steamAcikti = acik;
@@ -2594,7 +2902,7 @@ namespace SteamOfflineTool
             base.OnShown(e);
             if (onizleme) return;
             steamAcikti = Steam.Acik();
-            if (!steamAcikti && chkDuzelt.Checked)
+            if (!steamAcikti && Duzelt)
             {
                 string m = AyarlariDuzelt();
                 if (m != null) Mesaj(m, Yesil);
@@ -2603,11 +2911,18 @@ namespace SteamOfflineTool
             zamanlayici.Tick += Zamanlayici_Tick;
             zamanlayici.Start();
             kartlar.Focus();
+            if (AcilisDurumu == 1)
+                Mesaj(Dil.T("Updated to ", "Güncellendi: ") + Guncelleyici.Yazi(Guncelleyici.Surum) + Dil.T(". Notes are kept.", ". Notların korundu."), Yesil);
+            else if (AcilisDurumu == -1)
+                Mesaj(Dil.T("The update could not be installed; the old version is still in place. Details: guncelleme_gunlugu.txt",
+                            "Güncelleme kurulamadı, eski sürüm yerinde. Ayrıntı: guncelleme_gunlugu.txt"), Kirmizi);
+            GuncellemeDenetle();
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             kartlar.NotuBitir();
+            if (!onizleme) BoyutuKaydet();
             if (zamanlayici != null) zamanlayici.Stop();
             if (tepsi != null)
             {
