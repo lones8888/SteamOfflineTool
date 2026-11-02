@@ -25,7 +25,7 @@
 //   Ayarlar > Arayuz) kapali olmali; aciksa Steam secilen hesap yerine hesap secme ekranini acar.
 // - 1.3.4 (31.10.2026): bu ayari (config.vdf AlwaysShowUserChooser) motor her hesap acilisinda kendisi kapatir;
 //   ayarlar sutununda da gorunur ("Hesap secme ekrani acik").
-// - 1.4 (02.11.2026): hesaplar tablo yerine kart kart (TcNo Account Switcher gibi): Steam profil resmi, profil adi,
+// - 1.4 (02.11.2026): hesaplar tablo yerine kart kart: Steam profil resmi, profil adi,
 //   hesap, not; koyu tema, daha kucuk pencere. Profil resmini steam_hesap.py Steam'in onbelleginden
 //   (config\avatarcache\<SteamID64>.png) exe'nin yanindaki avatarlar klasorune kopyalar (exe Steam klasorune yine
 //   dokunmaz); resmi olmayan hesapta bas harf. Hesap kisayollarinin simgesi o hesabin resmi (sag altta son mod
@@ -1419,7 +1419,7 @@ namespace SteamOfflineTool
 
     // ------------------------------------------------------------------ hesap kartlari (1.4)
 
-    // Hesaplar kart kart (TcNo Account Switcher gibi): profil resmi, profil adi, hesap, not, ayar isareti (sag ust) ve son mod
+    // Hesaplar kart kart: profil resmi, profil adi, hesap, not, ayar isareti (sag ust) ve son mod
     // noktasi (resmin sag alti). Tek kontrol, kartlari kendisi cizer; not, kartin alt satirina tiklayinca yerinde yazilir.
     public class HesapKartlari : Panel
     {

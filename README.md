@@ -10,7 +10,7 @@ Made for playing single-player games offline without Steam starting big updates,
 
 ## Features
 
-- **Account cards with the Steam profile picture** (like TCNO Account Switcher), dark theme, compact window. Accounts without a picture show their initial.
+- **Account cards with the Steam profile picture**, dark theme, compact window. Accounts without a picture show their initial.
 - **Pick an account → Open Offline / Open Online.** If Steam is running, it is closed first (with your OK) and started again in the chosen mode.
 - **Desktop shortcut per account** – right-click an account → *Desktop shortcut: open offline/online*. One double-click opens Steam with that account, without the window. The shortcut's icon is the account's picture (gray dot = offline, green dot = online).
 - **Tray quick switch** – right-click the tray icon → *Open offline / Open online* → pick an account. An account with a note is shown there by its note.
