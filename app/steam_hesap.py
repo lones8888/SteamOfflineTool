@@ -46,7 +46,7 @@ KURALLAR = (
 )
 # Steam Ayarlar > Arayuz "Steam her baslatildiginda hangi hesabin kullanilacagini sor". Steam'in ayar tanimi
 # (steammessages_clientsettings.proto always_show_user_chooser): ConfigStore_Install "WebStorage\Auth\AlwaysShowUserChooser".
-# Satir yoksa Steam kapali sayar: satir eklenmez, yalniz "0" olmayan deger "0" yapilir (TcNo Account Switcher da boyle).
+# Satir yoksa Steam kapali sayar: satir eklenmez, yalniz "0" olmayan deger "0" yapilir.
 SECICI = (u"Hesap seçme ekranı kapalı", u"Hesap seçme ekranı açık", True, os.path.join("config", "config.vdf"),
           ("InstallConfigStore", "WebStorage", "Auth", "AlwaysShowUserChooser"), "0")
 
