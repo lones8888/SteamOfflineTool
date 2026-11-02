@@ -2091,7 +2091,7 @@ namespace SteamOfflineTool
         Label lblSteamYazi;
         FlowLayoutPanel secimCubugu;    // 1.4: hesap secilince altta
         Label lblSecili;
-        KoyuButon btnCevrimdisi, btnCevrimici, btnHesapKisayol;
+        KoyuButon btnCevrimdisi, btnCevrimici;
         ContextMenuStrip acmaMenu, kisayolMenu;     // 1.4: cift tik (cevrimdisi / cevrimici) ve alttaki kisayol secenekleri
         Label lblMesaj, lblWu;
         DurumIsigi wuIsigi;             // 1.4: Windows Update kapali / kismen kapaliysa yesil; tiklayinca kapatir
@@ -2205,19 +2205,14 @@ namespace SteamOfflineTool
             // 1.4: hesap secilince altta: hesap adi, Cevrimdisi Ac, Cevrimici Ac, Kisayol (secim yoksa gizli)
             secimCubugu = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Dock = DockStyle.Fill, Margin = new Padding(0, P(8), 0, 0), Visible = false };
             lblSecili = new Label { AutoSize = true, Font = kalin, Margin = new Padding(0, P(7), P(12), 0) };
-            btnCevrimdisi = Buton("", false);           // cevrimdisi gri, cevrimici yesil (karttaki son mod noktasi gibi)
+            btnCevrimdisi = Buton("", false);           // 1.3'teki gibi: cevrimdisi mavi ana dugme (beyaz kalin yazi), cevrimici duz dugme
             btnCevrimdisi.Font = kalin;
-            btnCevrimdisi.Dolgu = () => Tema.Cevrimdisi;
+            btnCevrimdisi.Dolgu = () => Color.FromArgb(26, 115, 232);
             btnCevrimdisi.DolguYazi = () => Color.White;
             btnCevrimici = Buton("", false);
-            btnCevrimici.Font = kalin;
-            btnCevrimici.Dolgu = () => Tema.Yesil;
-            btnCevrimici.DolguYazi = () => Tema.VurguYazi;
-            btnHesapKisayol = Buton("", false);
             btnCevrimdisi.Click += delegate { Ac("1"); };
             btnCevrimici.Click += delegate { Ac("0"); };
-            btnHesapKisayol.Click += delegate { HesapKisayolMenusu(); };
-            secimCubugu.Controls.AddRange(new Control[] { lblSecili, btnCevrimdisi, btnCevrimici, btnHesapKisayol });
+            secimCubugu.Controls.AddRange(new Control[] { lblSecili, btnCevrimdisi, btnCevrimici });
             Ekle(kok, secimCubugu, false);
             kartlar.SeciliDegisti += delegate { SecimGoster(); };
 
@@ -2269,7 +2264,6 @@ namespace SteamOfflineTool
             btnTema.Text = Tema.Acik ? "☾" : "☀";
             btnCevrimdisi.Text = Dil.T("Open Offline", "Çevrimdışı Aç");
             btnCevrimici.Text = Dil.T("Open Online", "Çevrimiçi Aç");
-            btnHesapKisayol.Text = Dil.T("Shortcut ▾", "Kısayol ▾");
             ipucu.SetToolTip(btnTema, Tema.Acik ? Dil.T("Dark theme", "Koyu tema") : Dil.T("Light theme", "Açık tema"));
             // 1.4: pencerede yazan aciklamalar (ust not, isaretler, kullanim) ⓘ'nin ustune gelince
             ipucu.SetToolTip(lblBilgi, Dil.T(
@@ -2280,9 +2274,9 @@ namespace SteamOfflineTool
                 + "always fixed while Steam is closed (✖: hover over the mark for details).\n"
                 + "Dot on the picture: last mode (gray offline, green online).\n"
                 + "Click a card's bottom line to write a note. Right-click an account for a desktop shortcut that opens it directly.\n\n"
-                + "Click an account: Open offline / Open online / Shortcut appear at the bottom (Enter: the same as a menu).\n"
+                + "Click an account: Open Offline / Open Online appear at the bottom (Enter: the same as a menu).\n"
                 + "Steam button at the top: green running, gray closed; click it to close Steam.\n"
-                + "Desktop shortcut button: the program itself or the selected account.\n"
+                + "Shortcut button at the bottom: the program itself or the selected account.\n"
                 + "Windows Update light: off green, partly off orange, on gray. Click it to turn updates off (green); \u21bb restores the default (gray).",
                 "Hesap değiştirmek için bu pencereyi kullan: Steam'in \"Hesap Değiştir\" ekranı her zaman çevrimiçi giriş yapar.\n\n"
                 + "Steam'in “Steam her başlatıldığında hangi hesabın kullanılacağını sor” ayarı kapalı olmalı (açıksa Steam seçtiğin hesap "
@@ -2291,14 +2285,14 @@ namespace SteamOfflineTool
                 + "ayarlar Steam kapalıyken her zaman düzeltilir (✖: ayrıntı için işaretin üzerine gel).\n"
                 + "Resimdeki nokta: son mod (gri çevrimdışı, yeşil çevrimiçi).\n"
                 + "Not için kartın alt satırına tıkla. Hesabı doğrudan açan masaüstü kısayolu için hesaba sağ tıkla.\n\n"
-                + "Hesaba tıkla: altta Çevrimdışı Aç / Çevrimiçi Aç / Kısayol çıkar (Enter: aynısı menü olarak).\n"
+                + "Hesaba tıkla: altta Çevrimdışı Aç / Çevrimiçi Aç çıkar (Enter: aynısı menü olarak).\n"
                 + "Üstteki Steam düğmesi: açık yeşil, kapalı gri; basınca Steam'i kapatır.\n"
-                + "Masaüstüne kısayol: programın kendisi ya da seçili hesap.\n"
+                + "Alttaki Kısayol: programın kendisi ya da seçili hesap.\n"
                 + "Windows Update ışığı: kapalı yeşil, kısmen kapalı turuncu, açık gri. Basınca güncellemeleri kapatır (yeşil); \u21bb varsayılana döndürür (gri)."));
             ipucu.SetToolTip(btnWuVarsayilan, Dil.T("Restore default (Windows Update back on)", "Varsayılana döndür (Windows Update yeniden açılır)"));
             lblWu.Text = Dil.T("Windows Update off", "Windows Update kapalı");
             chkBaslangic.Text = Dil.T("Start with Windows", "Windows açılınca başlat");
-            btnKisayol.Text = Dil.T("Desktop shortcut", "Masaüstüne kısayol");
+            btnKisayol.Text = Dil.T("Shortcut", "Kısayol");
             btnDil.Text = Dil.Turkce ? "Türkçe" : "English";
             ipucu.SetToolTip(btnDil, Dil.T("Language: click for Türkçe", "Dil: English için tıkla"));
             mnuKisayolCevrimdisi.Text = Dil.T("Desktop shortcut: open offline", "Masaüstü kısayolu: çevrimdışı aç");
@@ -2497,17 +2491,6 @@ namespace SteamOfflineTool
             Hesap h = SeciliHesap();
             if (h != null) lblSecili.Text = h.Persona.Length > 0 ? h.Persona : h.Ad;
             secimCubugu.Visible = h != null;
-        }
-
-        // seritteki kisayol dugmesi: secili hesabin masaustu kisayolu (cevrimdisi / cevrimici)
-        void HesapKisayolMenusu()
-        {
-            if (SeciliHesap() == null) return;
-            var m = new ContextMenuStrip();
-            m.Items.Add(Dil.T("Desktop shortcut: open offline", "Masaüstü kısayolu: çevrimdışı aç"), null, delegate { HesapKisayolu("1"); });
-            m.Items.Add(Dil.T("Desktop shortcut: open online", "Masaüstü kısayolu: çevrimiçi aç"), null, delegate { HesapKisayolu("0"); });
-            m.Closed += delegate { BeginInvoke(new Action(m.Dispose)); };
-            m.Show(btnHesapKisayol, new Point(0, btnHesapKisayol.Height));
         }
 
         // ---------------------------------------------------------- 1.4: cift tik, Steam isigi, kisayol secenekleri
