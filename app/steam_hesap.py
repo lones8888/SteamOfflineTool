@@ -17,7 +17,8 @@ Kullanim (bat): python steam_hesap.py <Steam klasoru> [--hepsi | --hesaplar a,b,
   --deger     : 1 = cevrimdisi + sorma (varsayilan), 0 = normal
   --dene      : sadece goster, dosyaya yazma
 Exe icin (cikti JSON, yalniz ASCII):
-  --liste                                          hesaplar ve ayar sorunlari
+  --liste                                          hesaplar ve ayar sorunlari; profil resimlerini Steam'in onbelleginden
+                                                   bu dosyanin yanindaki avatarlar klasorune kopyalar (1.4)
   --ac --hesap "<dosyadaki tam ad>" --deger 1|0 [--duzelt]
                                                    modu yazar, AutoLoginUser yapar, istenirse ayarlari duzeltir
   --duzelt [--hesaplar a,b]                        ayarlari duzeltir (hesap verilmezse butun hesaplar)
@@ -32,6 +33,7 @@ import sys
 HESAPLAR = []   # --hesaplar verilmezse bunlar (bos: --hesaplar a,b ya da --hepsi gerekir)
 ANAHTARLAR = ("WantsOfflineMode", "SkipOfflineModeWarning")
 STEAMID_TABANI = 76561197960265728     # userdata klasor adi = SteamID64 - bu
+AVATAR_KLASORU = os.path.join(os.path.dirname(os.path.abspath(__file__)), "avatarlar")   # exe kartlarda buradan okur
 
 # ad (istenen durum), sorun (yanlissa), genel (config.vdf: butun hesaplarda ortak), dosya, anahtar yolu, istenen
 KURALLAR = (
@@ -417,6 +419,37 @@ def secici_kapat(steam):
     return True
 
 
+# ------------------------------------------------------------------ profil resimleri (1.4)
+
+def avatar_kopyala(steam, no):
+    """Steam'in profil resmi onbellegi (config\\avatarcache\\<SteamID64>.png) -> avatarlar\\<no>.png. Exe Steam
+    klasorune dokunmaz (Kaspersky), resmi Python kopyalar; degismemisse kopyalamaz. Donus: avatarlar klasorundeki dosya
+    adi; resim yoksa None (exe bas harf gosterir)."""
+    if not no:
+        return None
+    kaynak = os.path.join(steam, "config", "avatarcache", "%d.png" % (no + STEAMID_TABANI))
+    ad = "%d.png" % no
+    hedef = os.path.join(AVATAR_KLASORU, ad)
+    try:
+        k = os.stat(kaynak)
+    except OSError:
+        return None
+    try:
+        h = os.stat(hedef)
+        if h.st_size == k.st_size and int(h.st_mtime) == int(k.st_mtime):
+            return ad
+    except OSError:
+        pass
+    try:
+        os.makedirs(AVATAR_KLASORU, exist_ok=True)
+        gecici = hedef + ".yaziliyor"
+        shutil.copy2(kaynak, gecici)          # copy2: tarih de kopyalanir, sonraki listede yeniden kopyalanmaz
+        os.replace(gecici, hedef)
+    except OSError:
+        return ad if os.path.isfile(hedef) else None
+    return ad
+
+
 # ------------------------------------------------------------------ exe icin komutlar (JSON)
 
 def liste(steam):
@@ -432,6 +465,10 @@ def liste(steam):
             h["sorunlar"] = None if s is None else [k[1] for k in s + ortak]
         except Exception as e:
             h["sorunlar"], h["ayar_hata"] = None, "Ayar dosyasi okunamadi: %s" % e
+        try:
+            h["avatar"] = avatar_kopyala(steam, h["no"])
+        except Exception:
+            h["avatar"] = None              # resim yoksa da liste calisir
         sonuc["hesaplar"].append(h)
     return sonuc
 

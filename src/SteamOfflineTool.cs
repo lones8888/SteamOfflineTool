@@ -25,12 +25,20 @@
 //   Ayarlar > Arayuz) kapali olmali; aciksa Steam secilen hesap yerine hesap secme ekranini acar.
 // - 1.3.4 (31.10.2026): bu ayari (config.vdf AlwaysShowUserChooser) motor her hesap acilisinda kendisi kapatir;
 //   ayarlar sutununda da gorunur ("Hesap secme ekrani acik").
+// - 1.4 (02.11.2026): hesaplar tablo yerine kart kart (TcNo Account Switcher gibi): Steam profil resmi, profil adi,
+//   hesap, not; koyu tema, daha kucuk pencere. Profil resmini steam_hesap.py Steam'in onbelleginden
+//   (config\avatarcache\<SteamID64>.png) exe'nin yanindaki avatarlar klasorune kopyalar (exe Steam klasorune yine
+//   dokunmaz); resmi olmayan hesapta bas harf. Hesap kisayollarinin simgesi o hesabin resmi (sag altta son mod
+//   noktasi: cevrimdisi gri, cevrimici yesil). Not, kartin alt satirina tiklayinca (ya da sag tik > Not yaz) yazilir.
 // Derleme: derle.bat (Windows'taki .NET Framework 4 derleyicisi, indirme gerekmez). Dil C# 5 ile sinirli.
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Drawing.Text;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -48,8 +56,8 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("Steam Offline Tool")]
 [assembly: AssemblyDescription("Opens Steam with the selected account in offline or online mode")]
 [assembly: AssemblyProduct("Steam Offline Tool")]
-[assembly: AssemblyVersion("1.3.4.0")]
-[assembly: AssemblyFileVersion("1.3.4.0")]
+[assembly: AssemblyVersion("1.4.0.0")]
+[assembly: AssemblyFileVersion("1.4.0.0")]
 
 namespace SteamOfflineTool
 {
@@ -64,6 +72,7 @@ namespace SteamOfflineTool
             DpiAyarla();
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            ToolStripManager.Renderer = new KoyuMenuCizici();     // 1.4: sag tik ve tepsi menuleri koyu
             string islem = args.FirstOrDefault(a => Yonetici.Islemler.Contains(a));
             if (islem != null)
             {
@@ -239,26 +248,29 @@ namespace SteamOfflineTool
             }
         }
 
-        // masaustune "<hesap> - Offline.lnk" / "<hesap> - Online.lnk" (Turkcede Cevrimdisi / Cevrimici)
-        public static string Olustur(string hesap, string deger)
+        // masaustune "<hesap> - Offline.lnk" / "<hesap> - Online.lnk" (Turkcede Cevrimdisi / Cevrimici).
+        // 1.4: simgesi hesabin profil resmi (avatarlar klasorunde .ico); yazilamazsa programin simgesi.
+        public static string Olustur(Hesap h, string deger)
         {
             string mod = deger == "1" ? Dil.T("Offline", "Çevrimdışı") : Dil.T("Online", "Çevrimiçi");
-            string ad = hesap + " - " + mod;
+            string ad = h.Ad + " - " + mod;
             foreach (char c in Path.GetInvalidFileNameChars()) ad = ad.Replace(c, '_');
-            Yaz(Path.Combine(Masaustu, ad + ".lnk"), (deger == "1" ? "--offline " : "--online ") + "\"" + hesap + "\"",
-                "Steam Offline Tool: " + hesap + " (" + mod + ")");
+            string simge = null;
+            try { simge = HesapResmi.KisayolSimgesi(h, deger == "1", ad); } catch (Exception) { }
+            Yaz(Path.Combine(Masaustu, ad + ".lnk"), (deger == "1" ? "--offline " : "--online ") + "\"" + h.Ad + "\"",
+                "Steam Offline Tool: " + h.Ad + " (" + mod + ")", simge);
             return ad;
         }
 
         // programin kendisi icin masaustu kisayolu (kurulum programi yok: Kaspersky kuruluma takiliyor)
         public static void UygulamaKisayolu()
         {
-            Yaz(Path.Combine(Masaustu, "Steam Offline Tool.lnk"), "", "Steam Offline Tool");
+            Yaz(Path.Combine(Masaustu, "Steam Offline Tool.lnk"), "", "Steam Offline Tool", null);
         }
 
         static string Masaustu { get { return Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory); } }
 
-        static void Yaz(string yol, string argumanlar, string aciklama)
+        static void Yaz(string yol, string argumanlar, string aciklama, string simge)
         {
             string exe = Application.ExecutablePath;
             dynamic kabuk = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell"));
@@ -266,7 +278,7 @@ namespace SteamOfflineTool
             lnk.TargetPath = exe;
             lnk.Arguments = argumanlar;
             lnk.WorkingDirectory = Path.GetDirectoryName(exe);
-            lnk.IconLocation = exe + ",0";
+            lnk.IconLocation = (simge ?? exe) + ",0";
             lnk.Description = aciklama;
             lnk.Save();
         }
@@ -351,6 +363,7 @@ namespace SteamOfflineTool
         public uint HesapNo;            // userdata klasor adi, 0 = bilinmiyor
         public List<string> Sorunlar;   // yanlis Steam ayarlari; null = bilinmiyor (bu hesapla Steam hic acilmamis)
         public string AyarHata;
+        public string Avatar;           // 1.4: avatarlar klasorundeki profil resmi (steam_hesap.py kopyalar), null = yok
     }
 
     // Steam dosyalarini okuyan/yazan steam_hesap.py'yi (exe'nin yaninda) gorunmez calistirir; cikti tek satir JSON.
@@ -456,7 +469,8 @@ namespace SteamOfflineTool
                     Zaman = Sayi(Al(d, "zaman")),
                     HesapNo = (uint)Sayi(Al(d, "no")),
                     Sorunlar = Al(d, "sorunlar") == null ? null : Dizi(Al(d, "sorunlar")).Select(x => Metin(x)).ToList(),
-                    AyarHata = Metin(Al(d, "ayar_hata"))
+                    AyarHata = Metin(Al(d, "ayar_hata")),
+                    Avatar = Metin(Al(d, "avatar"))
                 });
             }
             return liste;
@@ -925,16 +939,19 @@ namespace SteamOfflineTool
             StartPosition = FormStartPosition.CenterScreen;
             ClientSize = new Size((int)(780 * o), (int)(460 * o));
             MinimizeBox = false;
-            BackColor = Color.White;
+            BackColor = Tema.Arka;
+            ForeColor = Tema.Metin;
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch (Exception) { }
             var kutu = new TextBox
             {
                 Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill, WordWrap = true,
-                Font = new Font("Consolas", 10f), BackColor = Color.White, BorderStyle = BorderStyle.None, Text = metin
+                Font = new Font("Consolas", 10f), BackColor = Tema.Kart, ForeColor = Tema.Metin, BorderStyle = BorderStyle.None, Text = metin
             };
+            kutu.HandleCreated += delegate { Tema.KoyuKaydirma(kutu.Handle); };
             var ic = new Panel { Dock = DockStyle.Fill, Padding = new Padding((int)(12 * o)) };
             ic.Controls.Add(kutu);
-            var tamam = new Button { Text = Dil.T("OK", "Tamam"), DialogResult = DialogResult.OK, AutoSize = true, MinimumSize = new Size((int)(110 * o), (int)(32 * o)) };
+            var tamam = new KoyuButon { Text = Dil.T("OK", "Tamam"), DialogResult = DialogResult.OK, AutoSize = true, Ana = true,
+                                        MinimumSize = new Size((int)(110 * o), (int)(32 * o)) };
             var alt = new FlowLayoutPanel { Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Padding = new Padding((int)(8 * o)) };
             alt.Controls.Add(tamam);
             Controls.Add(ic);
@@ -942,17 +959,864 @@ namespace SteamOfflineTool
             AcceptButton = tamam;
             Shown += delegate { kutu.SelectionLength = 0; tamam.Focus(); };
         }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            Tema.KoyuBaslik(Handle);
+        }
+    }
+
+    // ------------------------------------------------------------------ koyu tema (1.4)
+
+    public static class Tema
+    {
+        public static readonly Color Arka = Color.FromArgb(24, 25, 28);             // pencere
+        public static readonly Color Kart = Color.FromArgb(34, 36, 41);             // hesap karti, Windows Update karti
+        public static readonly Color KartUstunde = Color.FromArgb(43, 46, 52);
+        public static readonly Color KartSecili = Color.FromArgb(36, 48, 68);
+        public static readonly Color Kenar = Color.FromArgb(55, 59, 66);
+        public static readonly Color Metin = Color.FromArgb(232, 234, 237);
+        public static readonly Color Soluk = Color.FromArgb(150, 157, 167);         // ikincil yazi
+        public static readonly Color Vurgu = Color.FromArgb(56, 132, 255);          // secili kart, ana buton
+        public static readonly Color Buton = Color.FromArgb(46, 49, 56);
+        public static readonly Color ButonUstunde = Color.FromArgb(57, 61, 69);
+        public static readonly Color NotRengi = Color.FromArgb(125, 180, 255);
+        public static readonly Color Yesil = Color.FromArgb(72, 199, 116);
+        public static readonly Color Kirmizi = Color.FromArgb(244, 99, 99);
+        public static readonly Color Turuncu = Color.FromArgb(240, 150, 70);
+        public static readonly Color Cevrimdisi = Color.FromArgb(128, 134, 144);    // son mod noktasi
+
+        static float oran;
+
+        // ekran olcegi (SetProcessDPIAware sonrasi)
+        public static float Oran
+        {
+            get
+            {
+                if (oran <= 0) oran = Olcek.Al();
+                return oran;
+            }
+        }
+
+        [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr pencere, int ozellik, ref int deger, int boyut);
+        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)] static extern int SetWindowTheme(IntPtr pencere, string uygulama, string liste);
+
+        // koyu baslik cubugu: Windows 11 / 10 20H1+ (20), eski Windows 10 (19); desteklenmezse hicbir sey olmaz
+        public static void KoyuBaslik(IntPtr pencere)
+        {
+            int bir = 1;
+            try
+            {
+                if (DwmSetWindowAttribute(pencere, 20, ref bir, 4) != 0) DwmSetWindowAttribute(pencere, 19, ref bir, 4);
+            }
+            catch (Exception) { }
+        }
+
+        // koyu kaydirma cubugu (Windows 10 1809+)
+        public static void KoyuKaydirma(IntPtr pencere)
+        {
+            try { SetWindowTheme(pencere, "DarkMode_Explorer", null); } catch (Exception) { }
+        }
+
+        public static GraphicsPath Yuvarlak(RectangleF r, float yaricap)
+        {
+            var yol = new GraphicsPath();
+            float d = Math.Min(yaricap * 2f, Math.Min(r.Width, r.Height));
+            if (d < 1f)
+            {
+                yol.AddRectangle(r);
+                return yol;
+            }
+            yol.AddArc(r.X, r.Y, d, d, 180, 90);
+            yol.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+            yol.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            yol.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+            yol.CloseFigure();
+            return yol;
+        }
+    }
+
+    // duz, koyu buton (Ana: mavi). Windows'un acik renkli buton cizimi yerine kendisi cizer.
+    public class KoyuButon : Button
+    {
+        bool ana, ustunde, basili;
+
+        public KoyuButon()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            FlatStyle = FlatStyle.Flat;         // AutoSize olcusu duz stile gore
+            FlatAppearance.BorderSize = 1;
+            ForeColor = Tema.Metin;
+            BackColor = Tema.Buton;
+            UseVisualStyleBackColor = false;
+        }
+
+        public bool Ana
+        {
+            get { return ana; }
+            set { ana = value; Invalidate(); }
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { ustunde = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { ustunde = basili = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnMouseUp(MouseEventArgs e) { basili = false; Invalidate(); base.OnMouseUp(e); }
+        protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left) { basili = true; Invalidate(); }
+            base.OnMouseDown(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.Clear(Parent != null ? Parent.BackColor : Tema.Arka);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            Color zemin = !Enabled ? Color.FromArgb(36, 38, 43)
+                        : ana ? (basili ? Color.FromArgb(38, 104, 214) : ustunde ? Color.FromArgb(82, 150, 255) : Tema.Vurgu)
+                        : (basili ? Color.FromArgb(68, 73, 82) : ustunde ? Tema.ButonUstunde : Tema.Buton);
+            Color kenar = !Enabled ? Color.FromArgb(46, 49, 55) : Focused && ShowFocusCues ? Color.FromArgb(150, 190, 255) : ana ? zemin : Tema.Kenar;
+            using (GraphicsPath yol = Tema.Yuvarlak(new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), 4f * Tema.Oran))
+            {
+                using (var f = new SolidBrush(zemin)) g.FillPath(f, yol);
+                using (var k = new Pen(kenar)) g.DrawPath(k, yol);
+            }
+            Color yazi = !Enabled ? Color.FromArgb(105, 110, 119) : ana ? Color.White : ForeColor;
+            TextRenderer.DrawText(g, Text, Font, ClientRectangle, yazi, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter
+                                  | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+        }
+    }
+
+    // koyu onay kutusu: kutu ve tik kendisi cizilir
+    public class KoyuOnay : CheckBox
+    {
+        public KoyuOnay()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            ForeColor = Tema.Metin;
+        }
+
+        int Kutu { get { return (int)Math.Round(14 * Tema.Oran); } }
+        int Bosluk { get { return (int)Math.Round(6 * Tema.Oran); } }
+
+        public override Size GetPreferredSize(Size istenen)
+        {
+            Size y = TextRenderer.MeasureText(Text, Font);
+            return new Size(Kutu + Bosluk + y.Width + 2, Math.Max(Kutu, y.Height) + (int)Math.Round(4 * Tema.Oran));
+        }
+
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.Clear(Parent != null ? Parent.BackColor : Tema.Arka);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            int k = Kutu, y = (Height - k) / 2;
+            var kutu = new RectangleF(0.5f, y + 0.5f, k - 1f, k - 1f);
+            using (GraphicsPath yol = Tema.Yuvarlak(kutu, 3f * Tema.Oran))
+            {
+                using (var f = new SolidBrush(Checked ? Tema.Vurgu : Tema.Buton)) g.FillPath(f, yol);
+                using (var p = new Pen(Checked ? Tema.Vurgu : Focused && ShowFocusCues ? Color.FromArgb(150, 190, 255) : Color.FromArgb(88, 94, 104)))
+                    g.DrawPath(p, yol);
+            }
+            if (Checked)
+                using (var p = new Pen(Color.White, Math.Max(1.6f, 1.8f * Tema.Oran)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+                    g.DrawLines(p, new[] { new PointF(k * 0.25f, y + k * 0.52f), new PointF(k * 0.43f, y + k * 0.71f), new PointF(k * 0.76f, y + k * 0.31f) });
+            var yazi = new Rectangle(k + Bosluk, 0, Width - k - Bosluk, Height);
+            TextRenderer.DrawText(g, Text, Font, yazi, Enabled ? ForeColor : Tema.Soluk, TextFormatFlags.VerticalCenter | TextFormatFlags.Left
+                                  | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+        }
+    }
+
+    // koyu ipucu. ElleGoster: kartlar gibi tek kontrolun icindeki parcalar icin (her kartin kendi ipucu var).
+    public class KoyuIpucu : ToolTip
+    {
+        readonly Font yazi = new Font("Segoe UI", 9f);
+        string elle;
+
+        public KoyuIpucu()
+        {
+            OwnerDraw = true;
+            AutoPopDelay = 20000;
+            InitialDelay = 500;
+            ReshowDelay = 100;
+            Popup += (s, e) =>
+            {
+                string t = elle ?? GetToolTip(e.AssociatedControl) ?? "";
+                Size o = TextRenderer.MeasureText(t, yazi, new Size(Olcu(420), 0), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+                e.ToolTipSize = new Size(o.Width + Olcu(16), o.Height + Olcu(10));
+            };
+            Draw += (s, e) =>
+            {
+                e.Graphics.Clear(Color.FromArgb(40, 43, 49));
+                using (var p = new Pen(Tema.Kenar)) e.Graphics.DrawRectangle(p, 0, 0, e.Bounds.Width - 1, e.Bounds.Height - 1);
+                TextRenderer.DrawText(e.Graphics, e.ToolTipText, yazi, Rectangle.Inflate(e.Bounds, -Olcu(8), -Olcu(5)), Tema.Metin,
+                                      TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.Left | TextFormatFlags.Top);
+            };
+        }
+
+        static int Olcu(float px) { return (int)Math.Round(px * Tema.Oran); }
+
+        public void ElleGoster(string metin, IWin32Window pencere, Point yer)
+        {
+            if (string.IsNullOrEmpty(metin)) return;
+            elle = metin;
+            Show(metin, pencere, yer, AutoPopDelay);
+        }
+
+        public void ElleGizle(IWin32Window pencere)
+        {
+            if (elle == null) return;
+            elle = null;
+            try { Hide(pencere); } catch (Exception) { }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) yazi.Dispose();
+            base.Dispose(disposing);
+        }
+    }
+
+    public class KoyuMenuRenkleri : ProfessionalColorTable
+    {
+        static readonly Color Zemin = Color.FromArgb(36, 38, 43);
+        static readonly Color Secili = Color.FromArgb(52, 57, 66);
+        public override Color ToolStripDropDownBackground { get { return Zemin; } }
+        public override Color ImageMarginGradientBegin { get { return Zemin; } }
+        public override Color ImageMarginGradientMiddle { get { return Zemin; } }
+        public override Color ImageMarginGradientEnd { get { return Zemin; } }
+        public override Color MenuBorder { get { return Tema.Kenar; } }
+        public override Color MenuItemBorder { get { return Secili; } }
+        public override Color MenuItemSelected { get { return Secili; } }
+        public override Color MenuItemSelectedGradientBegin { get { return Secili; } }
+        public override Color MenuItemSelectedGradientEnd { get { return Secili; } }
+        public override Color MenuItemPressedGradientBegin { get { return Secili; } }
+        public override Color MenuItemPressedGradientMiddle { get { return Secili; } }
+        public override Color MenuItemPressedGradientEnd { get { return Secili; } }
+        public override Color SeparatorDark { get { return Tema.Kenar; } }
+        public override Color SeparatorLight { get { return Zemin; } }
+    }
+
+    public class KoyuMenuCizici : ToolStripProfessionalRenderer
+    {
+        public KoyuMenuCizici() : base(new KoyuMenuRenkleri()) { RoundedEdges = false; }
+
+        protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+        {
+            e.TextColor = e.Item.Enabled ? Tema.Metin : Color.FromArgb(105, 110, 119);
+            base.OnRenderItemText(e);
+        }
+
+        protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
+        {
+            e.ArrowColor = e.Item != null && !e.Item.Enabled ? Color.FromArgb(105, 110, 119) : Tema.Metin;
+            base.OnRenderArrow(e);
+        }
+    }
+
+    // ------------------------------------------------------------------ hesap resimleri (1.4)
+
+    // Profil resmini Steam'in onbelleginden steam_hesap.py kopyalar (exe Steam klasorune dokunmaz); resim yoksa bas harfli
+    // renkli kare. Masaustu kisayolunun simgesi (.ico) da buradan yazilir.
+    public static class HesapResmi
+    {
+        public static string Klasor
+        {
+            get { return Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "avatarlar"); }
+        }
+
+        static readonly Color[] Renkler =
+        {
+            Color.FromArgb(88, 101, 242), Color.FromArgb(37, 99, 235), Color.FromArgb(13, 148, 136), Color.FromArgb(22, 163, 74),
+            Color.FromArgb(217, 119, 6), Color.FromArgb(220, 38, 38), Color.FromArgb(219, 39, 119), Color.FromArgb(124, 58, 237)
+        };
+
+        // avatarlar klasorundeki profil resmi (dosyayi acik tutmaz: steam_hesap.py sonra ustune yazabilsin); yoksa null
+        public static Bitmap Yukle(Hesap h)
+        {
+            if (string.IsNullOrEmpty(h.Avatar) || h.Avatar.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return null;
+            try
+            {
+                string yol = Path.Combine(Klasor, h.Avatar);
+                if (!File.Exists(yol)) return null;
+                using (var ms = new MemoryStream(File.ReadAllBytes(yol)))
+                using (Image r = Image.FromStream(ms))
+                    return new Bitmap(r);
+            }
+            catch (Exception) { return null; }
+        }
+
+        // resmi olmayan hesap: profil adinin (yoksa hesap adinin) bas harfi, renk hesap adindan (hep ayni renk)
+        public static Bitmap Harf(Hesap h, int s)
+        {
+            string ad = h.Persona.Trim().Length > 0 ? h.Persona.Trim() : h.Ad.Trim();
+            string harf = ad.Length > 0 ? StringInfo.GetNextTextElement(ad).ToUpper(CultureInfo.CurrentCulture) : "?";
+            int iz = 0;
+            foreach (char c in h.Ad.ToLowerInvariant()) iz = unchecked(iz * 31 + c);
+            var b = new Bitmap(s, s, PixelFormat.Format32bppArgb);
+            using (Graphics g = Graphics.FromImage(b))
+            using (var f = new Font("Segoe UI Semibold", s * 0.44f, FontStyle.Regular, GraphicsUnit.Pixel))
+            using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+            {
+                g.Clear(Renkler[(iz & 0x7fffffff) % Renkler.Length]);
+                g.TextRenderingHint = TextRenderingHint.AntiAlias;
+                g.DrawString(harf, f, Brushes.White, new RectangleF(0, s * 0.03f, s, s), sf);
+            }
+            return b;
+        }
+
+        // kartta gosterilen resim: s x s, kenarlari yuvarlatilmis
+        public static Bitmap Kart(Hesap h, int s)
+        {
+            using (Bitmap kaynak = Yukle(h) ?? Harf(h, 184))
+                return Yuvarlat(kaynak, s, s * 0.16f);
+        }
+
+        static Bitmap Yuvarlat(Bitmap kaynak, int s, float yaricap)
+        {
+            var b = new Bitmap(s, s, PixelFormat.Format32bppArgb);
+            using (var olcekli = new Bitmap(s, s, PixelFormat.Format32bppArgb))
+            {
+                using (Graphics g = Graphics.FromImage(olcekli))
+                using (var ia = new ImageAttributes())
+                {
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    g.CompositingQuality = CompositingQuality.HighQuality;
+                    ia.SetWrapMode(WrapMode.TileFlipXY);        // kenarlarda yari saydam cizgi olmasin
+                    g.DrawImage(kaynak, new Rectangle(0, 0, s, s), 0, 0, kaynak.Width, kaynak.Height, GraphicsUnit.Pixel, ia);
+                }
+                using (Graphics g = Graphics.FromImage(b))
+                using (var firca = new TextureBrush(olcekli, WrapMode.Clamp))
+                using (GraphicsPath yol = Tema.Yuvarlak(new RectangleF(0, 0, s, s), yaricap))
+                {
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    g.FillPath(firca, yol);
+                }
+            }
+            return b;
+        }
+
+        // masaustu kisayolu simgesi: profil resmi + sag altta son mod noktasi (cevrimdisi gri, cevrimici yesil). Dosya adi
+        // icerige gore degisir (Windows simge onbellegi eski resmi gostermesin); ayni kisayolun eski simgesi silinir.
+        public static string KisayolSimgesi(Hesap h, bool cevrimdisi, string ad)
+        {
+            byte[] ico;
+            using (Bitmap kaynak = Yukle(h) ?? Harf(h, 256))
+                ico = Ico(kaynak, cevrimdisi);
+            uint iz = 2166136261;
+            foreach (byte x in ico) iz = unchecked((iz ^ x) * 16777619);
+            Directory.CreateDirectory(Klasor);
+            string yol = Path.Combine(Klasor, ad + "." + iz.ToString("x8") + ".ico");
+            foreach (string eski in Directory.GetFiles(Klasor, ad + ".*.ico"))
+                if (!eski.Equals(yol, StringComparison.OrdinalIgnoreCase))
+                    try { File.Delete(eski); } catch (Exception) { }
+            if (!File.Exists(yol)) File.WriteAllBytes(yol, ico);
+            return yol;
+        }
+
+        static Bitmap SimgeResmi(Bitmap kaynak, int s, bool cevrimdisi)
+        {
+            Bitmap b = Yuvarlat(kaynak, s, s * 0.18f);
+            using (Graphics g = Graphics.FromImage(b))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                float d = Math.Max(6f, s * 0.32f), x = s - d, y = s - d, ic = d * 0.66f;
+                using (var halka = new SolidBrush(Color.FromArgb(32, 34, 38))) g.FillEllipse(halka, x, y, d, d);
+                using (var nokta = new SolidBrush(cevrimdisi ? Tema.Cevrimdisi : Tema.Yesil))
+                    g.FillEllipse(nokta, x + (d - ic) / 2f, y + (d - ic) / 2f, ic, ic);
+            }
+            return b;
+        }
+
+        // .ico: 256 piksel PNG, kucukler 32 bit BMP (her Windows surumu okur)
+        static byte[] Ico(Bitmap kaynak, bool cevrimdisi)
+        {
+            int[] boylar = { 16, 20, 24, 32, 40, 48, 64, 256 };
+            var parcalar = new List<byte[]>();
+            foreach (int s in boylar)
+                using (Bitmap b = SimgeResmi(kaynak, s, cevrimdisi))
+                    parcalar.Add(s >= 256 ? Png(b) : Dib(b));
+            using (var ms = new MemoryStream())
+            using (var w = new BinaryWriter(ms))
+            {
+                w.Write((short)0);
+                w.Write((short)1);
+                w.Write((short)boylar.Length);
+                int konum = 6 + 16 * boylar.Length;
+                for (int i = 0; i < boylar.Length; i++)
+                {
+                    byte boy = (byte)(boylar[i] >= 256 ? 0 : boylar[i]);
+                    w.Write(boy);
+                    w.Write(boy);
+                    w.Write((byte)0);
+                    w.Write((byte)0);
+                    w.Write((short)1);
+                    w.Write((short)32);
+                    w.Write(parcalar[i].Length);
+                    w.Write(konum);
+                    konum += parcalar[i].Length;
+                }
+                foreach (byte[] p in parcalar) w.Write(p);
+                w.Flush();
+                return ms.ToArray();
+            }
+        }
+
+        static byte[] Png(Bitmap b)
+        {
+            using (var ms = new MemoryStream())
+            {
+                b.Save(ms, ImageFormat.Png);
+                return ms.ToArray();
+            }
+        }
+
+        // BITMAPINFOHEADER + 32 bit BGRA satirlar (alttan uste) + bos AND maskesi (saydamlik alfa kanalinda)
+        static byte[] Dib(Bitmap b)
+        {
+            int s = b.Width, maske = (s + 31) / 32 * 4 * s;
+            var satir = new byte[s * 4];
+            using (var ms = new MemoryStream())
+            using (var w = new BinaryWriter(ms))
+            {
+                w.Write(40);
+                w.Write(s);
+                w.Write(s * 2);
+                w.Write((short)1);
+                w.Write((short)32);
+                w.Write(0);
+                w.Write(s * s * 4 + maske);
+                w.Write(0);
+                w.Write(0);
+                w.Write(0);
+                w.Write(0);
+                BitmapData veri = b.LockBits(new Rectangle(0, 0, s, s), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+                try
+                {
+                    for (int y = s - 1; y >= 0; y--)
+                    {
+                        Marshal.Copy(veri.Scan0 + y * veri.Stride, satir, 0, satir.Length);
+                        w.Write(satir);
+                    }
+                }
+                finally { b.UnlockBits(veri); }
+                w.Write(new byte[maske]);
+                w.Flush();
+                return ms.ToArray();
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ hesap kartlari (1.4)
+
+    // Hesaplar kart kart (TcNo Account Switcher gibi): profil resmi, profil adi, hesap, not, ayar isareti (sag ust) ve son mod
+    // noktasi (resmin sag alti). Tek kontrol, kartlari kendisi cizer; not, kartin alt satirina tiklayinca yerinde yazilir.
+    public class HesapKartlari : Panel
+    {
+        public const int ResimBoyu = 68;
+        const int KartEni = 116, KartBoyu = 142, Aralik = 8;
+        static readonly int[] SatirUstu = { 0, 18, 34 };     // isim, hesap, not satirlari (resmin altindan)
+
+        public class Oge
+        {
+            public Hesap Hesap;
+            public Bitmap Resim;
+            public string Isim = "", Alt = "", Not = "", Rozet = "", RozetIpucu = "", Ipucu = "";
+            public Color RozetRengi;
+            public bool SonKullanilan;
+            public bool? Cevrimdisi;            // son mod: true cevrimdisi, false cevrimici, null bilinmiyor
+        }
+
+        readonly float olcek;
+        readonly Font kalin, kucuk, rozetYazisi;
+        readonly KoyuIpucu ipucu;
+        readonly TextBox notKutusu;
+        readonly System.Windows.Forms.Timer ipucuZamani;
+        List<Oge> ogeler = new List<Oge>();
+        int secili = -1, ustunde = -1, duzenlenen = -1;
+        string ipucuAnahtari, bekleyenIpucu;
+        Point ipucuYeri;
+        public string NotIpucu = "", NotYeri = "";
+        public event Action<Hesap, string> NotDegisti;      // not yazildi ya da vazgecildi (yazi degismemis olabilir)
+
+        public HesapKartlari(float olcek, Font kalin, Font kucuk, KoyuIpucu ipucu)
+        {
+            this.olcek = olcek;
+            this.kalin = kalin;
+            this.kucuk = kucuk;
+            this.ipucu = ipucu;
+            rozetYazisi = new Font("Segoe UI Symbol", 10f, FontStyle.Bold);
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer
+                     | ControlStyles.ResizeRedraw | ControlStyles.Selectable, true);
+            BackColor = Tema.Arka;
+            AutoScroll = true;
+            TabStop = true;
+            notKutusu = new TextBox { Visible = false, BorderStyle = BorderStyle.FixedSingle, MaxLength = 300,
+                                      BackColor = Color.FromArgb(18, 19, 22), ForeColor = Tema.NotRengi, Font = kucuk };
+            notKutusu.KeyDown += NotTusu;
+            notKutusu.Leave += delegate { NotuBitir(); };
+            Controls.Add(notKutusu);
+            ipucuZamani = new System.Windows.Forms.Timer { Interval = 550 };
+            ipucuZamani.Tick += delegate
+            {
+                ipucuZamani.Stop();
+                if (bekleyenIpucu != null) ipucu.ElleGoster(bekleyenIpucu, this, ipucuYeri);
+            };
+        }
+
+        int P(float px) { return (int)Math.Round(px * olcek); }
+
+        public Hesap SeciliHesap { get { return secili >= 0 && secili < ogeler.Count ? ogeler[secili].Hesap : null; } }
+
+        public bool NotDuzenleniyor { get { return duzenlenen >= 0; } }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            Tema.KoyuKaydirma(Handle);
+        }
+
+        // kartlari yeniler; secAd: secili kalacak hesap (yoksa secim yok)
+        public void Doldur(List<Oge> yeni, string secAd)
+        {
+            NotuBitir();
+            foreach (Oge o in ogeler)
+                if (o.Resim != null) o.Resim.Dispose();
+            ogeler = yeni;
+            secili = secAd == null ? -1 : ogeler.FindIndex(o => o.Hesap.Ad.Equals(secAd, StringComparison.OrdinalIgnoreCase));
+            ustunde = -1;
+            IpucuKapat();
+            Yerlestir();
+            Invalidate();
+            if (secili >= 0) Gorunur(secili);
+        }
+
+        public void Sec(string ad)
+        {
+            int i = ogeler.FindIndex(o => o.Hesap.Ad.Equals(ad, StringComparison.OrdinalIgnoreCase));
+            if (i >= 0) SeciliYap(i);
+        }
+
+        void SeciliYap(int i)
+        {
+            if (i == secili) return;
+            NotuBitir();
+            secili = i;
+            Invalidate();
+            if (i >= 0) Gorunur(i);
+        }
+
+        // ---------------------------------------------------------- yerlesim
+
+        int Sutun { get { return Math.Max(1, (ClientSize.Width - P(4) + P(Aralik)) / (P(KartEni) + P(Aralik))); } }
+
+        // kartlar ortalanir (az hesapta tek sira ortada durur)
+        int SolBosluk
+        {
+            get
+            {
+                int n = Math.Min(Sutun, Math.Max(1, ogeler.Count));
+                return Math.Max(P(2), (ClientSize.Width - (n * P(KartEni) + (n - 1) * P(Aralik))) / 2);
+            }
+        }
+
+        // istemci koordinatlari (kaydirma dahil)
+        Rectangle KartAlani(int i)
+        {
+            int s = Sutun;
+            return new Rectangle(SolBosluk + i % s * (P(KartEni) + P(Aralik)), P(2) + i / s * (P(KartBoyu) + P(Aralik)) + AutoScrollPosition.Y,
+                                 P(KartEni), P(KartBoyu));
+        }
+
+        Rectangle ResimAlani(Rectangle r)
+        {
+            int a = P(ResimBoyu);
+            return new Rectangle(r.X + (r.Width - a) / 2, r.Y + P(10), a, a);
+        }
+
+        Rectangle SatirAlani(Rectangle r, int sira)
+        {
+            return new Rectangle(r.X + P(6), r.Y + P(10 + ResimBoyu + 5 + SatirUstu[sira]), r.Width - P(12), P(sira == 0 ? 17 : 15));
+        }
+
+        Rectangle RozetAlani(Rectangle r) { return new Rectangle(r.Right - P(25), r.Y + P(4), P(21), P(21)); }
+
+        Rectangle NotAlani(Rectangle r)
+        {
+            Rectangle n = SatirAlani(r, 2);
+            n.Inflate(0, P(2));
+            return n;
+        }
+
+        void Yerlestir()
+        {
+            int satir = (ogeler.Count + Sutun - 1) / Sutun;
+            var istenen = new Size(0, satir == 0 ? 0 : P(2) + satir * P(KartBoyu) + (satir - 1) * P(Aralik) + P(2));
+            if (AutoScrollMinSize != istenen) AutoScrollMinSize = istenen;
+        }
+
+        void Gorunur(int i)
+        {
+            Rectangle r = KartAlani(i);
+            int y = -AutoScrollPosition.Y;
+            if (r.Top < 0) AutoScrollPosition = new Point(0, y + r.Top - P(2));
+            else if (r.Bottom > ClientSize.Height) AutoScrollPosition = new Point(0, y + r.Bottom - ClientSize.Height + P(2));
+            Invalidate();
+        }
+
+        int Bul(Point p)
+        {
+            for (int i = 0; i < ogeler.Count; i++)
+                if (KartAlani(i).Contains(p)) return i;
+            return -1;
+        }
+
+        // kartin neresi: 1 ayar isareti, 2 not satiri, 0 diger
+        int Bolum(int i, Point p)
+        {
+            Rectangle r = KartAlani(i);
+            if (RozetAlani(r).Contains(p)) return 1;
+            return NotAlani(r).Contains(p) ? 2 : 0;
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            NotuBitir();
+            base.OnResize(e);
+            Yerlestir();
+            Invalidate();
+        }
+
+        protected override void OnScroll(ScrollEventArgs se)
+        {
+            NotuBitir();
+            IpucuKapat();
+            base.OnScroll(se);
+            Invalidate();
+        }
+
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            NotuBitir();
+            IpucuKapat();
+            base.OnMouseWheel(e);
+            Invalidate();
+        }
+
+        // ---------------------------------------------------------- cizim
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.Clear(BackColor);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            for (int i = 0; i < ogeler.Count; i++)
+            {
+                Rectangle r = KartAlani(i);
+                if (r.IntersectsWith(e.ClipRectangle)) Ciz(g, ogeler[i], r, i == secili, i == ustunde);
+            }
+        }
+
+        void Ciz(Graphics g, Oge o, Rectangle r, bool sec, bool ust)
+        {
+            Color zemin = sec ? Tema.KartSecili : ust ? Tema.KartUstunde : Tema.Kart;
+            float kalinlik = sec ? Math.Max(2f, 2f * olcek) : 1f;
+            var dis = new RectangleF(r.X + kalinlik / 2f, r.Y + kalinlik / 2f, r.Width - kalinlik, r.Height - kalinlik);
+            using (GraphicsPath yol = Tema.Yuvarlak(dis, P(8)))
+            {
+                using (var f = new SolidBrush(zemin)) g.FillPath(f, yol);
+                Color kenar = sec ? Tema.Vurgu : o.SonKullanilan ? Color.FromArgb(120, Tema.Vurgu) : Tema.Kenar;
+                using (var k = new Pen(kenar, kalinlik)) g.DrawPath(k, yol);
+            }
+            Rectangle a = ResimAlani(r);
+            if (o.Resim != null) g.DrawImage(o.Resim, a.X, a.Y, a.Width, a.Height);
+            if (o.Cevrimdisi.HasValue)
+            {
+                float d = P(16), x = a.Right - d + P(4), y = a.Bottom - d + P(4), ic = d - P(5);
+                using (var f = new SolidBrush(zemin)) g.FillEllipse(f, x, y, d, d);
+                using (var f = new SolidBrush(o.Cevrimdisi.Value ? Tema.Cevrimdisi : Tema.Yesil)) g.FillEllipse(f, x + (d - ic) / 2f, y + (d - ic) / 2f, ic, ic);
+            }
+            const TextFormatFlags orta = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
+                                       | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding;
+            if (o.Rozet.Length > 0) TextRenderer.DrawText(g, o.Rozet, rozetYazisi, RozetAlani(r), o.RozetRengi, orta);
+            TextRenderer.DrawText(g, o.Isim, kalin, SatirAlani(r, 0), Tema.Metin, orta);
+            if (o.Alt.Length > 0) TextRenderer.DrawText(g, o.Alt, kucuk, SatirAlani(r, 1), Tema.Soluk, orta);
+            if (o.Not.Length > 0) TextRenderer.DrawText(g, o.Not, kucuk, SatirAlani(r, 2), Tema.NotRengi, orta);
+            else if (sec || ust) TextRenderer.DrawText(g, NotYeri, kucuk, SatirAlani(r, 2), Color.FromArgb(98, 105, 116), orta);
+        }
+
+        // ---------------------------------------------------------- fare, klavye, ipucu
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            int i = Bul(e.Location);
+            if (i != ustunde)
+            {
+                ustunde = i;
+                Invalidate();
+            }
+            int bolum = i >= 0 ? Bolum(i, e.Location) : -1;
+            Cursor = bolum == 2 ? Cursors.IBeam : Cursors.Default;
+            IpucuAyarla(i, bolum, e.Location);
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            if (ustunde != -1)
+            {
+                ustunde = -1;
+                Invalidate();
+            }
+            IpucuKapat();
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            NotuBitir();
+            IpucuKapat();
+            Focus();
+            int i = Bul(e.Location);
+            if (i >= 0 && (e.Button == MouseButtons.Left || e.Button == MouseButtons.Right))
+            {
+                SeciliYap(i);
+                if (e.Button == MouseButtons.Left && Bolum(i, e.Location) == 2) NotuDuzenle();
+            }
+            base.OnMouseDown(e);
+        }
+
+        protected override bool IsInputKey(Keys tus)
+        {
+            switch (tus & Keys.KeyCode)
+            {
+                case Keys.Left: case Keys.Right: case Keys.Up: case Keys.Down: case Keys.Home: case Keys.End:
+                    return true;
+            }
+            return base.IsInputKey(tus);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (ogeler.Count == 0) return;
+            int s = Sutun, i = secili < 0 ? 0 : secili, yeni;
+            switch (e.KeyCode)
+            {
+                case Keys.Left: yeni = i - 1; break;
+                case Keys.Right: yeni = i + 1; break;
+                case Keys.Up: yeni = i - s; break;
+                case Keys.Down: yeni = i + s; break;
+                case Keys.Home: yeni = 0; break;
+                case Keys.End: yeni = ogeler.Count - 1; break;
+                case Keys.F2:
+                    NotuDuzenle();
+                    e.Handled = true;
+                    return;
+                default: return;
+            }
+            SeciliYap(secili < 0 ? 0 : Math.Max(0, Math.Min(ogeler.Count - 1, yeni)));
+            e.Handled = true;
+        }
+
+        void IpucuAyarla(int i, int bolum, Point p)
+        {
+            string anahtar = i < 0 ? null : i + ":" + bolum;
+            if (anahtar == ipucuAnahtari) return;
+            IpucuKapat();
+            ipucuAnahtari = anahtar;
+            if (i < 0) return;
+            Oge o = ogeler[i];
+            bekleyenIpucu = bolum == 1 ? o.RozetIpucu : bolum == 2 ? NotIpucu + (o.Not.Length > 0 ? "\n" + o.Not : "") : o.Ipucu;
+            ipucuYeri = new Point(p.X + P(12), p.Y + P(18));
+            ipucuZamani.Start();
+        }
+
+        void IpucuKapat()
+        {
+            ipucuZamani.Stop();
+            bekleyenIpucu = null;
+            ipucuAnahtari = null;
+            ipucu.ElleGizle(this);
+        }
+
+        // ---------------------------------------------------------- not (kartin alt satiri)
+
+        public void NotuDuzenle()
+        {
+            if (secili < 0 || duzenlenen >= 0) return;
+            IpucuKapat();
+            Gorunur(secili);
+            Rectangle n = NotAlani(KartAlani(secili));
+            n.Inflate(P(2), 0);
+            duzenlenen = secili;
+            notKutusu.Text = ogeler[secili].Not;
+            notKutusu.SetBounds(n.X, n.Y + (n.Height - notKutusu.PreferredHeight) / 2, n.Width, notKutusu.PreferredHeight);
+            notKutusu.Visible = true;
+            notKutusu.Focus();
+            notKutusu.SelectionStart = notKutusu.Text.Length;
+        }
+
+        public void NotuBitir() { NotKapat(true); }
+
+        void NotKapat(bool kaydet)
+        {
+            if (duzenlenen < 0) return;
+            int i = duzenlenen;
+            duzenlenen = -1;
+            bool odak = notKutusu.Focused;
+            string yeni = notKutusu.Text.Trim();
+            notKutusu.Visible = false;
+            if (odak && CanFocus) Focus();
+            if (i >= ogeler.Count) return;
+            Oge o = ogeler[i];
+            if (kaydet) o.Not = yeni;
+            Invalidate();
+            if (NotDegisti != null) NotDegisti(o.Hesap, o.Not);
+        }
+
+        void NotTusu(object s, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Escape)
+            {
+                e.SuppressKeyPress = true;
+                NotKapat(e.KeyCode == Keys.Enter);
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                foreach (Oge o in ogeler)
+                    if (o.Resim != null) o.Resim.Dispose();
+                ogeler.Clear();
+                rozetYazisi.Dispose();
+                ipucuZamani.Dispose();
+            }
+            base.Dispose(disposing);
+        }
     }
 
     // ------------------------------------------------------------------ ana pencere
 
     public class AnaPencere : Form
     {
-        static readonly Color Yesil = Color.FromArgb(27, 122, 52);
-        static readonly Color Kirmizi = Color.FromArgb(198, 40, 40);
-        static readonly Color Turuncu = Color.FromArgb(200, 95, 0);
-        static readonly Color Gri = Color.FromArgb(96, 103, 112);
-        static readonly Color KartRengi = Color.FromArgb(243, 245, 248);
+        static readonly Color Yesil = Tema.Yesil;          // 1.4: koyu tema renkleri
+        static readonly Color Kirmizi = Tema.Kirmizi;
+        static readonly Color Turuncu = Tema.Turuncu;
+        static readonly Color Gri = Tema.Soluk;
+        static readonly Color KartRengi = Tema.Kart;
         static string[] KuralAdlari()
         {
             return new[] { Dil.T("Steam Cloud off", "Steam Cloud kapalı"), Dil.T("Remote Play off", "Remote Play kapalı"),
@@ -1007,16 +1871,17 @@ namespace SteamOfflineTool
         string ortakHata;
         bool mesgul, steamAcikti, bekleyenYenileme, wuCalisiyor;
 
-        DataGridView tablo;
-        Button btnCevrimdisi, btnCevrimici, btnKapat, btnWuKapat, btnWuAc;
-        Label lblSteam, lblMesaj, lblWu;
-        CheckBox chkBaslangic, chkDuzelt;
+        HesapKartlari kartlar;
+        KoyuButon btnCevrimdisi, btnCevrimici, btnKapat, btnWuKapat, btnWuAc;
+        Label lblSteam, lblMesaj, lblWu, lblWuBaslik;
+        KoyuOnay chkBaslangic, chkDuzelt;
         Label lblBaslik, lblAciklama, lblDil, lblNot;
-        ComboBox cmbDil;
-        Button btnKisayol;
+        KoyuButon btnIngilizce, btnTurkce;
+        KoyuButon btnKisayol;
         ContextMenuStrip satirMenu, tepsiMenu;
-        ToolStripMenuItem mnuKisayolCevrimdisi, mnuKisayolCevrimici;
-        Font kalin;
+        ToolStripMenuItem mnuKisayolCevrimdisi, mnuKisayolCevrimici, mnuNot;
+        Font kalin, kucuk;
+        KoyuIpucu ipucu;
         System.Windows.Forms.Timer zamanlayici;
         NotifyIcon tepsi;
 
@@ -1027,13 +1892,15 @@ namespace SteamOfflineTool
             steam = Steam.Klasor();
             notlar = Notlar.Oku();
             Text = "Steam Offline Tool";
-            Font = new Font("Segoe UI", 9.75f);
+            Font = new Font("Segoe UI", 9f);
             kalin = new Font(Font, FontStyle.Bold);
+            kucuk = new Font("Segoe UI", 8.25f);
             AutoScaleMode = AutoScaleMode.None;
-            BackColor = Color.White;
+            BackColor = Tema.Arka;
+            ForeColor = Tema.Metin;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(P(940), P(700));
-            MinimumSize = new Size(P(800), P(580));
+            ClientSize = new Size(P(780), P(600));
+            MinimumSize = new Size(P(640), P(500));
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch (Exception) { }
             Olustur();
             HesaplariYukle();
@@ -1044,29 +1911,50 @@ namespace SteamOfflineTool
 
         int P(float px) { return (int)Math.Round(px * olcek); }
 
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            Tema.KoyuBaslik(Handle);
+        }
+
         // ---------------------------------------------------------- yerlesim
 
         void Olustur()
         {
             SuspendLayout();
-            var kok = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Padding = new Padding(P(16), P(12), P(16), P(12)) };
+            ipucu = new KoyuIpucu();
+            var kok = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Padding = new Padding(P(12), P(10), P(12), P(10)) };
             kok.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
-            var ust = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 0, P(6)) };
-            lblBaslik = new Label { AutoSize = true, Font = new Font(Font.FontFamily, 13f, FontStyle.Bold), Margin = new Padding(0, 0, P(12), 0) };
-            ust.Controls.Add(lblBaslik);
-            lblSteam = new Label { AutoSize = true, Font = kalin, Margin = new Padding(0, P(5), 0, 0) };
-            ust.Controls.Add(lblSteam);
+            // ust satir: baslik ve Steam durumu solda, dil sagda
+            var ust = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(0, 0, 0, P(4)) };
+            ust.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            ust.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            ust.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            var sol = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = new Padding(0) };
+            lblBaslik = new Label { AutoSize = true, Font = new Font(Font.FontFamily, 12f, FontStyle.Bold), Margin = new Padding(0, 0, P(10), 0) };
+            sol.Controls.Add(lblBaslik);
+            lblSteam = new Label { AutoSize = true, Font = kalin, Margin = new Padding(0, P(4), 0, 0) };
+            sol.Controls.Add(lblSteam);
+            var dil = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Right, Margin = new Padding(0) };
+            lblDil = new Label { AutoSize = true, Margin = new Padding(0, P(5), P(6), 0) };
+            btnIngilizce = DilButonu("English", false);         // 1.4: acilir liste yerine iki dugme (koyu temada duzgun gorunur)
+            btnTurkce = DilButonu("Türkçe", true);
+            dil.Controls.AddRange(new Control[] { lblDil, btnIngilizce, btnTurkce });
+            ust.Controls.Add(sol, 0, 0);
+            ust.Controls.Add(dil, 1, 0);
             Ekle(kok, ust, false);
 
             lblNot = Yazi();                // en ustte: Steam'in "acilista hesap sor" tiki kapali olmali
+            lblNot.Font = kucuk;
+            lblNot.ForeColor = Gri;
             lblNot.Margin = new Padding(0, 0, 0, P(6));
             Ekle(kok, lblNot, false);
 
-            tablo = TabloOlustur();
-            Ekle(kok, tablo, true);
+            kartlar = KartlarOlustur();
+            Ekle(kok, kartlar, true);
 
-            var butonlar = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, P(10), 0, 0) };
+            var butonlar = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, P(8), 0, 0) };
             btnCevrimdisi = Buton("", true);
             btnCevrimici = Buton("", false);
             btnKapat = Buton("", false);
@@ -1077,36 +1965,34 @@ namespace SteamOfflineTool
             Ekle(kok, butonlar, false);
 
             lblMesaj = Yazi();
-            lblMesaj.Margin = new Padding(0, P(8), 0, 0);
+            lblMesaj.Margin = new Padding(0, P(6), 0, 0);
             Ekle(kok, lblMesaj, false);
 
             lblAciklama = Yazi();
-            lblAciklama.Margin = new Padding(0, P(4), 0, 0);
+            lblAciklama.Font = kucuk;
+            lblAciklama.Margin = new Padding(0, P(3), 0, 0);
             lblAciklama.ForeColor = Gri;
             Ekle(kok, lblAciklama, false);
 
-            lblWu = Yazi();
+            lblWu = new Label { AutoSize = true, Font = kalin };
             btnWuKapat = Buton("", false);
             btnWuAc = Buton("", false);
             btnWuKapat.Click += delegate { YoneticiIslemi("--wu-kapat", WuKapatSorusu); };
             btnWuAc.Click += delegate { YoneticiIslemi("--wu-ac", WuAcSorusu); };
             TableLayoutPanel wu = Kart("Windows Update", lblWu, btnWuKapat, btnWuAc);
-            wu.Margin = new Padding(0, P(12), 0, 0);
+            wu.Margin = new Padding(0, P(8), 0, 0);
             Ekle(kok, wu, false);
 
-            var alt = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, P(10), 0, 0) };
-            chkBaslangic = new CheckBox { AutoSize = true, Checked = Baslangic.Acik(), Margin = new Padding(0, P(5), P(20), 0) };
-            chkDuzelt = new CheckBox { AutoSize = true, Checked = UygulamaAyari.Oku("AyarlariDuzelt", true), Margin = new Padding(0, P(5), P(20), 0) };
-            btnKisayol = new Button { AutoSize = true, Margin = new Padding(0, 0, P(20), 0), Padding = new Padding(P(6), 0, P(6), 0) };
-            lblDil = new Label { AutoSize = true, Margin = new Padding(0, P(7), P(6), 0) };
-            cmbDil = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = P(110), Margin = new Padding(0, P(3), 0, 0) };
-            cmbDil.Items.AddRange(new object[] { "English", "Türkçe" });
-            cmbDil.SelectedIndex = Dil.Turkce ? 1 : 0;
+            var alt = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, P(8), 0, 0) };
+            chkBaslangic = new KoyuOnay { AutoSize = true, Checked = Baslangic.Acik(), Margin = new Padding(0, P(4), P(16), 0) };
+            chkDuzelt = new KoyuOnay { AutoSize = true, Checked = UygulamaAyari.Oku("AyarlariDuzelt", true), Margin = new Padding(0, P(4), P(16), 0) };
+            btnKisayol = Buton("", false);
+            btnKisayol.MinimumSize = new Size(0, P(28));
+            btnKisayol.Margin = new Padding(0, 0, P(16), 0);
             chkBaslangic.CheckedChanged += delegate { BaslangicDegisti(); };
             chkDuzelt.CheckedChanged += delegate { DuzeltDegisti(); };
             btnKisayol.Click += delegate { UygulamaKisayolu(); };
-            cmbDil.SelectedIndexChanged += delegate { DilDegisti(); };
-            alt.Controls.AddRange(new Control[] { chkBaslangic, chkDuzelt, btnKisayol, lblDil, cmbDil });
+            alt.Controls.AddRange(new Control[] { chkBaslangic, chkDuzelt, btnKisayol });
             Ekle(kok, alt, false);
 
             Controls.Add(kok);
@@ -1135,26 +2021,30 @@ namespace SteamOfflineTool
             btnCevrimdisi.Text = Dil.T("Open Offline", "Çevrimdışı Aç");
             btnCevrimici.Text = Dil.T("Open Online", "Çevrimiçi Aç");
             btnKapat.Text = Dil.T("Close Steam", "Steam'i Kapat");
-            lblAciklama.Text = Dil.T("Settings column: ✔ = Steam Cloud off, Remote Play off, games update only when launched, account chooser off. "
-                                   + "An account with ✖ is fixed while Steam is closed (hover for details). "
-                                   + "Right-click an account for a desktop shortcut that opens it directly.",
-                                     "Ayarlar sütunu: ✔ = Steam Cloud kapalı, Remote Play kapalı, oyunlar yalnızca başlatılınca güncellenir, hesap seçme ekranı kapalı. "
-                                   + "✖ olan hesap Steam kapalıyken düzeltilir (ayrıntı için üzerine gel). "
-                                   + "Hesabı doğrudan açan masaüstü kısayolu için hesaba sağ tıkla.");
+            // 1.4: kisa aciklama; uzun hali ipucunda
+            lblAciklama.Text = Dil.T("✔ settings right · ✖ fixed while Steam is closed · dot on the picture: last mode (gray offline, green online) · "
+                                   + "click a card's bottom line: note · right-click: desktop shortcut",
+                                     "✔ ayarlar doğru · ✖ Steam kapalıyken düzeltilir · resimdeki nokta: son mod (gri çevrimdışı, yeşil çevrimiçi) · "
+                                   + "kartın alt satırına tıkla: not · sağ tık: masaüstü kısayolu");
+            ipucu.SetToolTip(lblAciklama, Dil.T("✔ = Steam Cloud off, Remote Play off, games update only when launched, account chooser off.\n"
+                                              + "An account with ✖ is fixed while Steam is closed (hover over the mark for details).\n"
+                                              + "Right-click an account for a desktop shortcut that opens it directly, with the account's picture.",
+                                                "✔ = Steam Cloud kapalı, Remote Play kapalı, oyunlar yalnızca başlatılınca güncellenir, hesap seçme ekranı kapalı.\n"
+                                              + "✖ olan hesap Steam kapalıyken düzeltilir (ayrıntı için işaretin üzerine gel).\n"
+                                              + "Hesabı doğrudan açan, hesabın resmiyle masaüstü kısayolu için hesaba sağ tıkla."));
             btnWuKapat.Text = Dil.T("Turn Off Updates", "Güncellemeleri Kapat");
             btnWuAc.Text = Dil.T("Restore Default", "Varsayılana Döndür");
             chkBaslangic.Text = Dil.T("Start with Windows", "Windows açılınca başlat");
             chkDuzelt.Text = Dil.T("Fix Steam settings if wrong", "Steam ayarları yanlışsa düzelt");
             btnKisayol.Text = Dil.T("Desktop shortcut", "Masaüstüne kısayol");
             lblDil.Text = Dil.T("Language:", "Dil:");
-            tablo.Columns["ayar"].HeaderText = Dil.T("Settings", "Ayarlar");
-            tablo.Columns["hesap"].HeaderText = Dil.T("Account", "Hesap");
-            tablo.Columns["profil"].HeaderText = Dil.T("Profile name", "Profil adı");
-            tablo.Columns["mod"].HeaderText = Dil.T("Last mode", "Son mod");
-            tablo.Columns["giris"].HeaderText = Dil.T("Last sign-in", "Son giriş");
-            tablo.Columns["not"].HeaderText = Dil.T("Note (click and type)", "Not (tıkla ve yaz)");
+            btnIngilizce.Ana = !Dil.Turkce;
+            btnTurkce.Ana = Dil.Turkce;
             mnuKisayolCevrimdisi.Text = Dil.T("Desktop shortcut: open offline", "Masaüstü kısayolu: çevrimdışı aç");
             mnuKisayolCevrimici.Text = Dil.T("Desktop shortcut: open online", "Masaüstü kısayolu: çevrimiçi aç");
+            mnuNot.Text = Dil.T("Write note", "Not yaz");
+            kartlar.NotIpucu = Dil.T("Click to write a note", "Not yazmak için tıkla");
+            kartlar.NotYeri = Dil.T("+ note", "+ not");
         }
 
         static void Ekle(TableLayoutPanel t, Control c, bool doldur)
@@ -1169,104 +2059,60 @@ namespace SteamOfflineTool
             return new Label { AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Right };
         }
 
-        Button Buton(string yazi, bool ana)
+        KoyuButon Buton(string yazi, bool ana)
         {
-            var b = new Button
+            return new KoyuButon
             {
-                Text = yazi, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(P(132), P(34)),
-                Padding = new Padding(P(8), P(2), P(8), P(2)), Margin = new Padding(0, 0, P(8), 0)
+                Text = yazi, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(P(112), P(30)),
+                Padding = new Padding(P(8), P(1), P(8), P(1)), Margin = new Padding(0, 0, P(6), 0), Ana = ana, Font = ana ? kalin : Font
             };
-            if (ana)
+        }
+
+        // dil dugmesi: secili dil mavi
+        KoyuButon DilButonu(string yazi, bool tr)
+        {
+            var b = new KoyuButon
             {
-                b.FlatStyle = FlatStyle.Flat;
-                b.FlatAppearance.BorderSize = 0;
-                b.BackColor = Color.FromArgb(26, 115, 232);
-                b.ForeColor = Color.White;
-                b.Font = kalin;
-            }
+                Text = yazi, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, MinimumSize = new Size(P(64), P(28)),
+                Padding = new Padding(P(4), 0, P(4), 0), Margin = new Padding(0, 0, P(4), 0)
+            };
+            b.Click += delegate { DilDegisti(tr); };
             return b;
         }
 
+        // Windows Update karti (1.4: tek satir; servis ayrintisi ipucunda)
         TableLayoutPanel Kart(string baslik, Label durum, params Button[] butonlar)
         {
-            var t = new TableLayoutPanel { ColumnCount = 1, AutoSize = true, Dock = DockStyle.Fill, BackColor = KartRengi, Padding = new Padding(P(12), P(10), P(12), P(10)) };
+            var t = new TableLayoutPanel { ColumnCount = 3, RowCount = 1, AutoSize = true, Dock = DockStyle.Fill, BackColor = KartRengi, Padding = new Padding(P(10), P(6), P(6), P(6)) };
+            t.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            Ekle(t, new Label { Text = baslik, AutoSize = true, Font = kalin, Margin = new Padding(0, 0, 0, P(4)) }, false);
-            durum.Margin = new Padding(0, 0, 0, P(8));
-            Ekle(t, durum, false);
-            var f = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0) };
+            t.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            lblWuBaslik = new Label { Text = baslik, AutoSize = true, Font = kalin, Anchor = AnchorStyles.Left, Margin = new Padding(0, 0, P(10), 0) };
+            durum.Anchor = AnchorStyles.Left;
+            durum.Margin = new Padding(0);
+            var f = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Right, Margin = new Padding(0) };
             f.Controls.AddRange(butonlar);
-            Ekle(t, f, false);
+            t.Controls.Add(lblWuBaslik, 0, 0);
+            t.Controls.Add(durum, 1, 0);
+            t.Controls.Add(f, 2, 0);
             return t;
         }
 
-        DataGridView TabloOlustur()
+        HesapKartlari KartlarOlustur()
         {
-            var t = new DataGridView
-            {
-                Dock = DockStyle.Fill, Margin = new Padding(0),
-                AllowUserToAddRows = false, AllowUserToDeleteRows = false, AllowUserToResizeRows = false, AllowUserToOrderColumns = false,
-                RowHeadersVisible = false, MultiSelect = false,
-                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-                EditMode = DataGridViewEditMode.EditOnEnter,
-                BackgroundColor = Color.White, BorderStyle = BorderStyle.FixedSingle,
-                CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal,
-                GridColor = Color.FromArgb(229, 231, 235),
-                EnableHeadersVisualStyles = false,
-                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing,
-                ColumnHeadersHeight = P(34),
-                ShowCellToolTips = true
-            };
-            t.RowTemplate.Height = P(32);
-            DataGridViewCellStyle bas = t.ColumnHeadersDefaultCellStyle;
-            bas.BackColor = KartRengi;
-            bas.SelectionBackColor = KartRengi;
-            bas.ForeColor = Color.FromArgb(55, 65, 81);
-            bas.SelectionForeColor = bas.ForeColor;
-            bas.Font = kalin;
-            bas.Padding = new Padding(P(4), 0, P(4), 0);
-            t.DefaultCellStyle.SelectionBackColor = Color.FromArgb(214, 232, 253);
-            t.DefaultCellStyle.SelectionForeColor = Color.Black;
-            t.DefaultCellStyle.Padding = new Padding(P(4), 0, P(4), 0);
+            var k = new HesapKartlari(olcek, kalin, kucuk, ipucu) { Dock = DockStyle.Fill, Margin = new Padding(0) };
+            k.NotDegisti += NotKaydet;
 
-            DataGridViewTextBoxColumn ayar = Sutun(t, "ayar", "", 78);
-            ayar.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
-            ayar.DefaultCellStyle.Font = new Font("Segoe UI Symbol", 12f, FontStyle.Bold);
-            ayar.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
-            Sutun(t, "hesap", "", 190);
-            Sutun(t, "profil", "", 170);
-            Sutun(t, "mod", "", 100);
-            Sutun(t, "giris", "", 130);
-            DataGridViewTextBoxColumn notSutunu = Sutun(t, "not", "", 0);
-            notSutunu.ReadOnly = false;
-            notSutunu.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-            notSutunu.MinimumWidth = P(140);
-            notSutunu.MaxInputLength = 300;
-            notSutunu.DefaultCellStyle.ForeColor = Color.FromArgb(30, 64, 175);
-            t.CellEndEdit += NotKaydet;
-
-            // hesaba sag tik: o hesabi dogrudan acan masaustu kisayolu
+            // hesaba sag tik: o hesabi dogrudan acan masaustu kisayolu (1.4: ve not)
             satirMenu = new ContextMenuStrip();
             mnuKisayolCevrimdisi = new ToolStripMenuItem("", null, delegate { HesapKisayolu("1"); });
             mnuKisayolCevrimici = new ToolStripMenuItem("", null, delegate { HesapKisayolu("0"); });
-            satirMenu.Items.AddRange(new ToolStripItem[] { mnuKisayolCevrimdisi, mnuKisayolCevrimici });
+            mnuNot = new ToolStripMenuItem("", null, delegate { kartlar.NotuDuzenle(); });
+            satirMenu.Items.AddRange(new ToolStripItem[] { mnuKisayolCevrimdisi, mnuKisayolCevrimici, new ToolStripSeparator(), mnuNot });
             satirMenu.Opening += (s, e) => { if (SeciliHesap() == null) e.Cancel = true; };
-            t.ContextMenuStrip = satirMenu;
-            t.CellMouseDown += (s, e) =>
-            {
-                if (e.Button != MouseButtons.Right || e.RowIndex < 0) return;
-                if (t.IsCurrentCellInEditMode) t.EndEdit();
-                t.CurrentCell = t.Rows[e.RowIndex].Cells["hesap"];
-            };
-            return t;
-        }
-
-        DataGridViewTextBoxColumn Sutun(DataGridView t, string ad, string baslik, int genislik)
-        {
-            var s = new DataGridViewTextBoxColumn { Name = ad, HeaderText = baslik, ReadOnly = true, SortMode = DataGridViewColumnSortMode.NotSortable };
-            if (genislik > 0) s.Width = P(genislik);
-            t.Columns.Add(s);
-            return s;
+            k.ContextMenuStrip = satirMenu;
+            return k;
         }
 
         // ---------------------------------------------------------- durumlar
@@ -1287,8 +2133,7 @@ namespace SteamOfflineTool
 
         Hesap SeciliHesap()
         {
-            DataGridViewRow r = tablo.CurrentRow;
-            return r == null ? null : r.Tag as Hesap;
+            return kartlar.SeciliHesap;
         }
 
         static string ModAdi(string wants)
@@ -1305,10 +2150,9 @@ namespace SteamOfflineTool
 
         void HesaplariYukle()
         {
-            if (tablo.IsCurrentCellInEditMode) tablo.EndEdit();
+            kartlar.NotuBitir();
             Hesap secili = SeciliHesap();
             string secAd = secili != null ? secili.Ad : null;
-            tablo.Rows.Clear();
             try { hesaplar = Motor.Liste(steam, out ortakHata); }
             catch (Exception e)
             {
@@ -1316,62 +2160,65 @@ namespace SteamOfflineTool
                 ortakHata = null;
                 Mesaj(Dil.T("ERROR: ", "HATA: ") + e.Message, Kirmizi);
             }
+            KartlariDoldur(secAd);
+            Mesgul(mesgul);
+        }
+
+        // 1.4: tablo satirlari yerine kartlar (profil resmi, ad, not, ayar isareti, ipuclari)
+        void KartlariDoldur(string secAd)
+        {
             string son = Steam.SonHesap();
             son = son == null ? null : son.Trim();
             if (secAd == null) secAd = son;
+            var ogeler = new List<HesapKartlari.Oge>();
             foreach (Hesap h in hesaplar)
             {
                 string not;
                 notlar.TryGetValue(h.Ad, out not);
-                int i = tablo.Rows.Add("", h.Ad, h.Persona, ModAdi(h.Wants), Tarih(h.Zaman), not ?? "");
-                DataGridViewRow r = tablo.Rows[i];
-                r.Tag = h;
-                if (son != null && h.Ad.Equals(son, StringComparison.OrdinalIgnoreCase))
+                bool sonKullanilan = son != null && h.Ad.Equals(son, StringComparison.OrdinalIgnoreCase);
+                var o = new HesapKartlari.Oge
                 {
-                    r.Cells["hesap"].Style.Font = kalin;
-                    r.Cells["hesap"].ToolTipText = Dil.T("Last used account", "Son kullanılan hesap");
-                }
+                    Hesap = h,
+                    Isim = h.Persona.Length > 0 ? h.Persona : h.Ad,
+                    Alt = h.Persona.Length > 0 && !h.Persona.Equals(h.Ad, StringComparison.OrdinalIgnoreCase) ? h.Ad : "",
+                    Not = not ?? "",
+                    SonKullanilan = sonKullanilan,
+                    Cevrimdisi = h.Wants == "1" ? true : h.Wants == "0" ? false : (bool?)null,
+                    Resim = HesapResmi.Kart(h, P(HesapKartlari.ResimBoyu)),
+                    Ipucu = Dil.T("Account: ", "Hesap: ") + h.Ad
+                            + (h.Persona.Length > 0 ? "\n" + Dil.T("Profile name: ", "Profil adı: ") + h.Persona : "")
+                            + "\n" + Dil.T("Last mode: ", "Son mod: ") + ModAdi(h.Wants)
+                            + "\n" + Dil.T("Last sign-in: ", "Son giriş: ") + Tarih(h.Zaman)
+                            + (sonKullanilan ? "\n" + Dil.T("Last used account", "Son kullanılan hesap") : "")
+                };
+                AyarIsareti(h, o);
+                ogeler.Add(o);
             }
-            AyarIsaretleri();
-            foreach (DataGridViewRow r in tablo.Rows)
-                if (secAd != null && ((Hesap)r.Tag).Ad.Equals(secAd, StringComparison.OrdinalIgnoreCase))
-                {
-                    tablo.CurrentCell = r.Cells["hesap"];
-                    break;
-                }
-            Mesgul(mesgul);
+            kartlar.Doldur(ogeler, secAd);
         }
 
-        void AyarIsaretleri()
+        void AyarIsareti(Hesap h, HesapKartlari.Oge o)
         {
-            foreach (DataGridViewRow r in tablo.Rows)
+            string neden = ortakHata ?? h.AyarHata;
+            if (neden != null || h.Sorunlar == null)
             {
-                Hesap h = (Hesap)r.Tag;
-                DataGridViewCell c = r.Cells["ayar"];
-                string neden = ortakHata ?? h.AyarHata;
-                Color renk;
-                if (neden != null || h.Sorunlar == null)
-                {
-                    c.Value = "?";
-                    renk = Gri;
-                    c.ToolTipText = neden ?? Dil.T("Steam was never opened with this account on this PC; there is no settings file.",
-                                                   "Bu hesapla bu bilgisayarda Steam hiç açılmamış; ayar dosyası yok.");
-                }
-                else if (h.Sorunlar.Count == 0)
-                {
-                    c.Value = "✔";
-                    renk = Yesil;
-                    c.ToolTipText = string.Join("\n", KuralAdlari().Select(k => "✔ " + k));
-                }
-                else
-                {
-                    c.Value = "✖";
-                    renk = Kirmizi;
-                    c.ToolTipText = Dil.T("Will be fixed while Steam is closed:\n", "Steam kapalıyken düzeltilecek:\n")
-                                  + string.Join("\n", h.Sorunlar.Select(k => "✖ " + Dil.Motor(k)));
-                }
-                c.Style.ForeColor = renk;
-                c.Style.SelectionForeColor = renk;
+                o.Rozet = "?";
+                o.RozetRengi = Gri;
+                o.RozetIpucu = neden ?? Dil.T("Steam was never opened with this account on this PC; there is no settings file.",
+                                              "Bu hesapla bu bilgisayarda Steam hiç açılmamış; ayar dosyası yok.");
+            }
+            else if (h.Sorunlar.Count == 0)
+            {
+                o.Rozet = "✔";
+                o.RozetRengi = Yesil;
+                o.RozetIpucu = string.Join("\n", KuralAdlari().Select(k => "✔ " + k));
+            }
+            else
+            {
+                o.Rozet = "✖";
+                o.RozetRengi = Kirmizi;
+                o.RozetIpucu = Dil.T("Will be fixed while Steam is closed:\n", "Steam kapalıyken düzeltilecek:\n")
+                             + string.Join("\n", h.Sorunlar.Select(k => "✖ " + Dil.Motor(k)));
             }
         }
 
@@ -1406,9 +2253,11 @@ namespace SteamOfflineTool
         {
             string ayrinti;
             int d = Guncelleme.Durum(out ayrinti);
-            lblWu.Text = (d == 1 ? Dil.T("✔ OFF", "✔ KAPALI") : d == 0 ? Dil.T("ON (Windows default)", "AÇIK (Windows varsayılanı)")
-                                                                   : Dil.T("PARTLY OFF", "KISMEN KAPALI")) + "\r\n" + ayrinti;
+            lblWu.Text = d == 1 ? Dil.T("✔ OFF", "✔ KAPALI") : d == 0 ? Dil.T("ON (Windows default)", "AÇIK (Windows varsayılanı)")
+                                                              : Dil.T("PARTLY OFF", "KISMEN KAPALI");
             lblWu.ForeColor = d == 1 ? Yesil : d == 0 ? Gri : Turuncu;
+            ipucu.SetToolTip(lblWu, ayrinti);       // 1.4: servis ayrintisi ipucunda (pencere daha kucuk)
+            ipucu.SetToolTip(lblWuBaslik, ayrinti);
             if (!wuCalisiyor)
             {
                 btnWuKapat.Enabled = d != 1;        // zaten tamamen kapaliysa "Güncellemeleri Kapat" pasif
@@ -1515,10 +2364,8 @@ namespace SteamOfflineTool
             if (mesgul) return;
             Hesap h = secilen ?? SeciliHesap();
             if (h == null) { Mesaj(Dil.T("Select an account from the list first.", "Önce listeden bir hesap seç."), Kirmizi); return; }
-            if (tablo.IsCurrentCellInEditMode) tablo.EndEdit();
-            if (secilen != null)
-                foreach (DataGridViewRow r in tablo.Rows)
-                    if (((Hesap)r.Tag).Ad.Equals(h.Ad, StringComparison.OrdinalIgnoreCase)) { tablo.CurrentCell = r.Cells["hesap"]; break; }
+            kartlar.NotuBitir();
+            if (secilen != null) kartlar.Sec(h.Ad);
             string mod = deger == "1" ? Dil.T("offline", "çevrimdışı") : Dil.T("online", "çevrimiçi");
             bool duzelt = chkDuzelt.Checked;
             Mesgul(true);
@@ -1584,7 +2431,7 @@ namespace SteamOfflineTool
         {
             Hesap h = SeciliHesap();
             if (h == null) return;
-            try { Mesaj(Dil.T("Desktop shortcut created: ", "Masaüstü kısayolu oluşturuldu: ") + KisayolAc.Olustur(h.Ad, deger), Yesil); }
+            try { Mesaj(Dil.T("Desktop shortcut created: ", "Masaüstü kısayolu oluşturuldu: ") + KisayolAc.Olustur(h, deger), Yesil); }
             catch (Exception e) { Mesaj(Dil.T("ERROR: shortcut could not be created: ", "HATA: kısayol oluşturulamadı: ") + e.Message, Kirmizi); }
         }
 
@@ -1598,9 +2445,8 @@ namespace SteamOfflineTool
             catch (Exception e) { Mesaj(Dil.T("ERROR: shortcut could not be created: ", "HATA: kısayol oluşturulamadı: ") + e.Message, Kirmizi); }
         }
 
-        void DilDegisti()
+        void DilDegisti(bool tr)
         {
-            bool tr = cmbDil.SelectedIndex == 1;
             if (tr == Dil.Turkce) return;
             Dil.Turkce = tr;
             try { UygulamaAyari.Yaz("Turkce", tr); } catch (Exception) { }
@@ -1708,11 +2554,10 @@ namespace SteamOfflineTool
             Mesaj(m ?? Dil.T("Steam settings are already correct.", "Steam ayarları zaten doğru."), Yesil);
         }
 
-        void NotKaydet(object sender, DataGridViewCellEventArgs e)
+        // kartta not yazildi (ya da vazgecildi): degistiyse hesap_notlari.txt'ye yazilir
+        void NotKaydet(Hesap h, string yeni)
         {
-            if (e.RowIndex < 0 || tablo.Columns[e.ColumnIndex].Name != "not") return;
-            Hesap h = (Hesap)tablo.Rows[e.RowIndex].Tag;
-            string yeni = Convert.ToString(tablo.Rows[e.RowIndex].Cells[e.ColumnIndex].Value).Trim();
+            yeni = (yeni ?? "").Trim();
             string eski;
             notlar.TryGetValue(h.Ad, out eski);
             if (yeni != (eski ?? ""))
@@ -1736,7 +2581,7 @@ namespace SteamOfflineTool
             if (steamAcikti && !acik)
             {
                 // Steam kendi kapandi: modlari yeniden oku, yanlis ayarlari duzelt
-                if (tablo.IsCurrentCellInEditMode) bekleyenYenileme = true;
+                if (kartlar.NotDuzenleniyor) bekleyenYenileme = true;
                 else HesaplariYukle();
                 string m = chkDuzelt.Checked ? AyarlariDuzelt() : null;
                 if (m != null) Mesaj(m, Yesil);
@@ -1757,12 +2602,12 @@ namespace SteamOfflineTool
             zamanlayici = new System.Windows.Forms.Timer { Interval = 2000 };
             zamanlayici.Tick += Zamanlayici_Tick;
             zamanlayici.Start();
-            tablo.Focus();
+            kartlar.Focus();
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            if (tablo.IsCurrentCellInEditMode) tablo.EndEdit();
+            kartlar.NotuBitir();
             if (zamanlayici != null) zamanlayici.Stop();
             if (tepsi != null)
             {

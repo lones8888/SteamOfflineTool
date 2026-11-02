@@ -10,13 +10,14 @@ Made for playing single-player games offline without Steam starting big updates,
 
 ## Features
 
+- **Account cards with the Steam profile picture** (like TCNO Account Switcher), dark theme, compact window. Accounts without a picture show their initial.
 - **Pick an account → Open Offline / Open Online.** If Steam is running, it is closed first (with your OK) and started again in the chosen mode.
-- **Desktop shortcut per account** – right-click an account → *Desktop shortcut: open offline/online*. One double-click opens Steam with that account, without the window.
+- **Desktop shortcut per account** – right-click an account → *Desktop shortcut: open offline/online*. One double-click opens Steam with that account, without the window. The shortcut's icon is the account's picture (gray dot = offline, green dot = online).
 - **Tray quick switch** – right-click the tray icon → *Open offline / Open online* → pick an account. An account with a note is shown there by its note.
-- **Notes** next to each account (stored only on your PC).
-- **Settings check** (✔ / ✖ column): Steam Cloud off, Remote Play off, games update only when launched, account chooser off. Wrong settings are fixed while Steam is closed (optional checkbox; the account chooser is always turned off).
+- **Notes** on each account card – click the card's bottom line or right-click → *Write note* (stored only on your PC).
+- **Settings check** (✔ / ✖ mark on each card): Steam Cloud off, Remote Play off, games update only when launched, account chooser off. Wrong settings are fixed while Steam is closed (optional checkbox; the account chooser is always turned off).
 - **Windows Update off / back to default** (Chris Titus WinUtil "Disable Updates" steps, asks for administrator permission).
-- **English / Türkçe** interface (English by default).
+- **English / Türkçe** interface (English by default, buttons at the top right).
 - No installer, no internet, no account passwords: it only edits Steam's own local files while Steam is closed.
 
 ## Download and run
@@ -49,13 +50,15 @@ Steam remembers, per account, whether to start offline (`WantsOfflineMode` in `S
 
 For offline mode the account must have signed in once on this PC with **Remember me**. Games with DRM such as Denuvo may still need to go online from time to time.
 
+Profile pictures come from Steam's own local cache (`Steam\config\avatarcache\<SteamID64>.png`). `steam_hesap.py` copies them to the `avatarlar` folder next to the exe, so the window still never touches Steam's files.
+
 ## Antivirus notes
 
 - The window (`SteamOfflineTool.exe`) never touches Steam's files. All Steam file reading/writing is done by `steam_hesap.py` with the bundled, **PSF-signed** embedded Python. Some antivirus products flag unsigned programs that read Steam login files; this split avoids that.
 - There is **no installer** on purpose: unsigned installers that copy programs and add themselves to startup are often flagged. Just extract and run.
 - Nothing is sent anywhere; the program has no network code.
 
-## Settings column (✔ / ✖)
+## Settings mark (✔ / ✖)
 
 | Setting | Why |
 |---|---|
@@ -80,7 +83,7 @@ Steam'i **seçtiğin hesapla**, **çevrimdışı ya da çevrimiçi** açar. Stea
 
 > **Not:** Steam'in **“Steam her başlatıldığında hangi hesabın kullanılacağını sor”** ayarı (*Ayarlar → Arayüz*) kapalı olmalı; açıksa Steam seçtiğin hesap yerine hesap seçme ekranını açar. **Program her hesap açışında bunu kendisi kapatır.**
 
-**Özellikler:** hesap seç → Çevrimdışı Aç / Çevrimiçi Aç; hesaba sağ tık → o hesabı doğrudan açan **masaüstü kısayolu**; saat yanındaki simgeye sağ tık → hesap listesinden **hızlı açma** (not yazdığın hesap orada notuyla görünür); hesap notları; Steam ayar denetimi (Cloud kapalı, Remote Play kapalı, oyunlar yalnızca başlatılınca güncellenir, hesap seçme ekranı kapalı); Windows Update kapat / varsayılana döndür; **İngilizce / Türkçe** arayüz (pencerenin altından seçilir).
+**Özellikler:** hesaplar kart kart, **Steam profil resmiyle** (koyu tema, küçük pencere; resmi olmayan hesapta baş harf); hesap seç → Çevrimdışı Aç / Çevrimiçi Aç; hesaba sağ tık → o hesabı doğrudan açan **masaüstü kısayolu** (simgesi hesabın resmi: gri nokta çevrimdışı, yeşil nokta çevrimiçi); saat yanındaki simgeye sağ tık → hesap listesinden **hızlı açma** (not yazdığın hesap orada notuyla görünür); hesap notları (kartın alt satırına tıkla ya da sağ tık → Not yaz); Steam ayar denetimi (Cloud kapalı, Remote Play kapalı, oyunlar yalnızca başlatılınca güncellenir, hesap seçme ekranı kapalı); Windows Update kapat / varsayılana döndür; **İngilizce / Türkçe** arayüz (pencerenin sağ üstünden seçilir).
 
 **İndirme linki (her zaman son sürüm):**
 
