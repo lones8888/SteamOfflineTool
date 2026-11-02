@@ -34,7 +34,7 @@ https://github.com/lones8888/SteamOfflineTool/releases/latest/download/SteamOffl
 1. Download **SteamOfflineTool.zip** (link above, or from **[Releases](../../releases/latest)**).
 2. Extract it, for example to your **Desktop** (do not run it from inside the zip).
 3. Run **SteamOfflineTool.exe** from the extracted folder.
-4. Optional: click **Desktop shortcut** in the window, and tick **Start with Windows** if you want it in the tray at startup.
+4. Optional: click **Shortcut** in the window for a desktop shortcut, and click the **Start with Windows** button (green = on) if you want it in the tray at startup.
 
 ### One-line install (PowerShell)
 
@@ -98,7 +98,7 @@ Steam'i **seçtiğin hesapla**, **çevrimdışı ya da çevrimiçi** açar. Stea
 https://github.com/lones8888/SteamOfflineTool/releases/latest/download/SteamOfflineTool.zip
 ```
 
-**Kullanım:** zip'i indir → masaüstüne çıkar → klasördeki **SteamOfflineTool.exe**'yi çalıştır. Kurulum programı yok (imzasız kurulumları antivirüsler yanlışlıkla engelliyor). İstersen penceredeki **Masaüstüne kısayol** düğmesine bas, **Windows açılınca başlat**'ı işaretle.
+**Kullanım:** zip'i indir → masaüstüne çıkar → klasördeki **SteamOfflineTool.exe**'yi çalıştır. Kurulum programı yok (imzasız kurulumları antivirüsler yanlışlıkla engelliyor). İstersen penceredeki **Kısayol** düğmesine bas, **Windows açılınca başlat** düğmesine bas (yeşil = açık).
 
 **Tek satırla kurulum:** normal PowerShell aç (yönetici gerekmez) ve yapıştır:
 

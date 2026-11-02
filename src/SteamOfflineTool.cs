@@ -1198,49 +1198,6 @@ namespace SteamOfflineTool
         }
     }
 
-    // koyu onay kutusu: kutu ve tik kendisi cizilir
-    public class KoyuOnay : CheckBox
-    {
-        public KoyuOnay()
-        {
-            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
-            ForeColor = Tema.Metin;
-        }
-
-        int Kutu { get { return (int)Math.Round(14 * Tema.Oran); } }
-        int Bosluk { get { return (int)Math.Round(6 * Tema.Oran); } }
-
-        public override Size GetPreferredSize(Size istenen)
-        {
-            Size y = TextRenderer.MeasureText(Text, Font);
-            return new Size(Kutu + Bosluk + y.Width + 2, Math.Max(Kutu, y.Height) + (int)Math.Round(4 * Tema.Oran));
-        }
-
-        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
-        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            Graphics g = e.Graphics;
-            g.Clear(Parent != null ? Parent.BackColor : Tema.Arka);
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            int k = Kutu, y = (Height - k) / 2;
-            var kutu = new RectangleF(0.5f, y + 0.5f, k - 1f, k - 1f);
-            using (GraphicsPath yol = Tema.Yuvarlak(kutu, 3f * Tema.Oran))
-            {
-                using (var f = new SolidBrush(Checked ? Tema.Vurgu : Tema.Buton)) g.FillPath(f, yol);
-                using (var p = new Pen(Checked ? Tema.Vurgu : Focused && ShowFocusCues ? Tema.OdakKenar : Tema.KutuKenar))
-                    g.DrawPath(p, yol);
-            }
-            if (Checked)
-                using (var p = new Pen(Tema.VurguYazi, Math.Max(1.6f, 1.8f * Tema.Oran)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
-                    g.DrawLines(p, new[] { new PointF(k * 0.25f, y + k * 0.52f), new PointF(k * 0.43f, y + k * 0.71f), new PointF(k * 0.76f, y + k * 0.31f) });
-            var yazi = new Rectangle(k + Bosluk, 0, Width - k - Bosluk, Height);
-            TextRenderer.DrawText(g, Text, Font, yazi, Enabled ? Tema.Metin : Tema.Soluk, TextFormatFlags.VerticalCenter | TextFormatFlags.Left
-                                  | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
-        }
-    }
-
     // durum isigi: acikken yesil yanar, kapaliyken gri (Steam: yaninda girisli hesap; Windows Update: durum, tiklaninca kapatir)
     public class DurumIsigi : Control
     {
@@ -2097,7 +2054,8 @@ namespace SteamOfflineTool
         DurumIsigi wuIsigi;             // 1.4: Windows Update kapali / kismen kapaliysa yesil; tiklayinca kapatir
         int wuDurum;                    // Guncelleme.Durum: 1 kapali, 0 acik (varsayilan), -1 kismen
         DurumIsigi steamIsigi;
-        KoyuOnay chkBaslangic;
+        Label lblBaslangic;             // 1.4: "Windows acilinca baslat" + kutulu isik (acik yesil, kapali gri; basinca degisir)
+        DurumIsigi baslangicIsigi;
         const bool Duzelt = true;       // 1.4: Steam ayarlari her zaman duzeltilir (eskiden alttaki kutu: "yanlissa duzelt")
         Label lblBaslik, lblBaslik2, lblBilgi;
         KoyuButon btnDil;
@@ -2226,13 +2184,14 @@ namespace SteamOfflineTool
             alt.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             alt.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             var altSol = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = new Padding(0) };
-            chkBaslangic = new KoyuOnay { AutoSize = true, Checked = Baslangic.Acik(), Margin = new Padding(0, P(4), P(16), 0) };
+            lblBaslangic = new Label { AutoSize = true, Font = kalin, Margin = new Padding(0, P(6), P(8), 0) };
+            baslangicIsigi = new DurumIsigi { Font = kalin, Kutulu = true, Cursor = Cursors.Hand, Margin = new Padding(0, 0, P(16), 0) };
+            baslangicIsigi.Click += delegate { BaslangicDegisti(); };
             btnKisayol = Buton("", false);
             btnKisayol.MinimumSize = new Size(0, P(28));
             btnKisayol.Margin = new Padding(0);
-            chkBaslangic.CheckedChanged += delegate { BaslangicDegisti(); };
             btnKisayol.Click += delegate { KisayolMenusu(); };     // 1.4: programin kendisi ya da secili hesap
-            altSol.Controls.AddRange(new Control[] { chkBaslangic, btnKisayol });
+            altSol.Controls.AddRange(new Control[] { lblBaslangic, baslangicIsigi, btnKisayol });
             // Windows Update isigi: kapali yesil, kismen kapali turuncu, acik gri. Gri ya da turuncuyken basinca guncellemeleri
             // kapatir (yesil olur); ↻ varsayilana dondurur (gri olur).
             var altSag = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Right, Margin = new Padding(0) };
@@ -2291,7 +2250,8 @@ namespace SteamOfflineTool
                 + "Windows Update ışığı: kapalı yeşil, kısmen kapalı turuncu, açık gri. Basınca güncellemeleri kapatır (yeşil); \u21bb varsayılana döndürür (gri)."));
             ipucu.SetToolTip(btnWuVarsayilan, Dil.T("Restore default (Windows Update back on)", "Varsayılana döndür (Windows Update yeniden açılır)"));
             lblWu.Text = Dil.T("Windows Update off", "Windows Update kapalı");
-            chkBaslangic.Text = Dil.T("Start with Windows", "Windows açılınca başlat");
+            lblBaslangic.Text = Dil.T("Start with Windows", "Windows açılınca başlat");
+            BaslangicGoster();
             btnKisayol.Text = Dil.T("Shortcut", "Kısayol");
             btnDil.Text = Dil.Turkce ? "Türkçe" : "English";
             ipucu.SetToolTip(btnDil, Dil.T("Language: click for Türkçe", "Dil: English için tıkla"));
@@ -2966,15 +2926,30 @@ namespace SteamOfflineTool
             return hatali;
         }
 
+        // basinca acilir / kapanir (onizlemede yazilmaz)
         void BaslangicDegisti()
         {
+            if (onizleme) return;
+            bool ac = !Baslangic.Acik();
             try
             {
-                Baslangic.Ayarla(chkBaslangic.Checked);
-                Mesaj(chkBaslangic.Checked ? Dil.T("Steam Offline Tool will start with Windows.", "Windows açılınca Steam Offline Tool açılacak.")
-                                           : Dil.T("It will no longer start with Windows.", "Windows açılınca artık açılmayacak."), Gri);
+                Baslangic.Ayarla(ac);
+                Mesaj(ac ? Dil.T("Steam Offline Tool will start with Windows.", "Windows açılınca Steam Offline Tool açılacak.")
+                         : Dil.T("It will no longer start with Windows.", "Windows açılınca artık açılmayacak."), Gri);
             }
             catch (Exception e) { Mesaj(Dil.T("ERROR: could not write the startup setting: ", "HATA: başlangıç ayarı yazılamadı: ") + e.Message, Kirmizi); }
+            BaslangicGoster();
+        }
+
+        void BaslangicGoster()
+        {
+            bool acik = Baslangic.Acik();
+            baslangicIsigi.Ayarla(acik, "", Yesil);
+            baslangicIsigi.Invalidate();
+            string ipucuYazi = acik ? Dil.T("On: starts with Windows. Click to turn off.", "Açık: Windows açılınca başlar. Kapatmak için tıkla.")
+                                    : Dil.T("Off. Click to start with Windows.", "Kapalı. Windows açılınca başlaması için tıkla.");
+            ipucu.SetToolTip(baslangicIsigi, ipucuYazi);
+            ipucu.SetToolTip(lblBaslangic, ipucuYazi);
         }
 
         // kartta not yazildi (ya da vazgecildi): degistiyse hesap_notlari.txt'ye yazilir
